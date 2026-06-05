@@ -1,0 +1,7 @@
+[Unit]
+Description=patchup-agent: refresh system state
+PartOf=patchup-agent.service
+
+[Timer]
+OnActiveSec=15sec
+OnUnitActiveSec=15min

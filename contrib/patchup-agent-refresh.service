@@ -1,0 +1,11 @@
+[Unit]
+Description=patchup-agent: refresh system state
+After=patchup-agent.service patchup-agent.socket
+Requires=patchup-agent.service
+Wants=network-online.target
+
+[Service]
+ExecStart=/usr/bin/patchup agent --refresh /run/patchup.sock 127.0.0.1:2424 -D . -vv
+
+LockPersonality=yes
+MemoryDenyWriteExecute=yes

@@ -1,11 +1,12 @@
 [Unit]
 Description=patchup-agent: patch management agent
 After=network-online.target remote-fs.target nss-lookup.target
-Requires=patchup-agent.socket
+Requires=patchup-agent.socket patchup-agent-refresh.timer
 Wants=network-online.target
 
 [Service]
-ExecStart=/usr/bin/patchup agent 127.0.0.1:2424 -D . -vv
+ExecStart=/usr/bin/patchup agent 127.0.0.1:2424 -vv
+Environment=PATCHUP_AGENT_DATA=.
 DynamicUser=yes
 StateDirectory=patchup
 WorkingDirectory=/var/lib/patchup
