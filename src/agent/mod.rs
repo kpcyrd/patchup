@@ -88,23 +88,31 @@ async fn serve_socket_client(_state: Arc<ArcSwap<State>>, stream: UnixStream) ->
     Ok(())
 }
 
-pub async fn run(_config: Option<&Path>, _args: &Agent) -> Result<()> {
-    if let Ok(fds) = sd_listen_fds::get()
-        && !fds.is_empty()
+async fn bind() -> Result<UnixListener> {
+    let socket = if let Ok(fds) = sd_listen_fds::get()
+        && let num_fds = fds.len()
+        && let Some((name, fd)) = fds.into_iter().next()
     {
-        info!("Received sockets from systemd:");
-        for (name, fd) in fds {
-            let fd = fd.into_std();
-            info!("Socket {name:?}: fd={fd:?}");
-        }
-    }
+        info!(
+            "Received {} sockets from systemd, using first one: {name:?}",
+            num_fds
+        );
+        let fd = fd.into_std();
+        let fd = std::os::unix::net::UnixListener::from(fd);
+        UnixListener::from_std(fd).context("Failed to use sd-listen socket from systemd")?
+    } else {
+        // TODO: use proper path
+        let socket_path = "data/agent/patchup-agent.sock";
+        fs::remove_file(socket_path).await.ok();
+        debug!("Binding to socket: {socket_path:?}");
+        UnixListener::bind(socket_path)
+            .with_context(|| format!("Failed to bind socket: {socket_path:?}"))?
+    };
+    Ok(socket)
+}
 
-    let socket_path = "data/agent/patchup-agent.sock";
-    fs::remove_file(socket_path).await.ok();
-    debug!("Binding to socket: {socket_path:?}");
-    let socket = UnixListener::bind(socket_path)
-        .with_context(|| format!("Failed to bind socket: {socket_path:?}"))?;
-
+pub async fn run(_config: Option<&Path>, _args: &Agent) -> Result<()> {
+    let socket = bind().await?;
     let state = Arc::new(ArcSwap::from_pointee(State::default()));
 
     tokio::select! {
