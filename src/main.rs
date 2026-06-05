@@ -13,7 +13,7 @@ use crate::config::Config;
 use crate::errors::*;
 use clap::Parser;
 use env_logger::Env;
-use etcetera::BaseStrategy;
+// use etcetera::BaseStrategy;
 use russh::keys::{HashAlg, PrivateKey, PublicKey};
 use tokio::io::AsyncReadExt;
 
@@ -32,10 +32,12 @@ async fn main() -> Result<()> {
 
     debug!("args: {args:?}");
 
+    /*
     let strategy = etcetera::choose_base_strategy().unwrap();
 
     debug!("config-dir: {:?}", strategy.config_dir());
     debug!("data-dir: {:?}", strategy.data_dir());
+    */
 
     match &args.subcommand {
         Subcommand::Ls(_ls) => {
