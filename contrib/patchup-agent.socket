@@ -1,0 +1,7 @@
+[Unit]
+PartOf=patchup-agent.service
+
+[Socket]
+ListenStream=/run/patchup.sock
+SocketMode=0660
+Accept=no
