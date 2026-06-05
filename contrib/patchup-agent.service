@@ -10,5 +10,18 @@ DynamicUser=yes
 StateDirectory=patchup
 WorkingDirectory=/var/lib/patchup
 
+CapabilityBoundingSet=
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+PrivateDevices=yes
+ProtectControlGroups=yes
+ProtectHome=yes
+ProtectHostname=yes
+ProtectKernelLogs=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictNamespaces=yes
+
 [Install]
 WantedBy=multi-user.target
