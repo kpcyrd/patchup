@@ -75,6 +75,9 @@ pub struct Status {
     /// Reload the host status first
     #[arg(short, long)]
     pub refresh: bool,
+    /// Output the status in JSON format
+    #[arg(short, long)]
+    pub json: bool,
 }
 
 /// Internal plumbing commands

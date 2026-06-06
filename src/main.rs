@@ -12,6 +12,7 @@ use crate::args::{Args, Plumbing, Subcommand};
 use crate::config::Config;
 use crate::errors::*;
 use clap::Parser;
+use colored::Colorize;
 use env_logger::Env;
 // use etcetera::BaseStrategy;
 use russh::keys::{HashAlg, PrivateKey, PublicKey};
@@ -84,10 +85,23 @@ async fn main() -> Result<()> {
                 agent::run(args.config.as_deref(), agent).await?;
             }
         }
-        Subcommand::Status(_status) => {
+        Subcommand::Status(args) => {
             let mut sock = ipc::agent::AgentIpc::connect("data/agent/patchup-agent.sock").await?;
             let status = sock.status().await?;
-            println!("status={status:?}");
+            if args.json {
+                let json = serde_json::to_string_pretty(&status)?;
+                println!("{json}");
+            } else {
+                println!("{}  {}", "hostname: ".bold(), status.node.hostname);
+                println!("{}  {}", "os:       ".bold(), status.node.os);
+                println!("{}  {}", "arch:     ".bold(), status.node.arch);
+                println!("{}  {}", "kernel:   ".bold(), status.node.kernel);
+                println!(
+                    "{}  {}",
+                    "uptime:   ".bold(),
+                    humantime::format_duration(status.node.uptime)
+                );
+            }
         }
         Subcommand::Plumbing(plumbing) => match plumbing {
             Plumbing::CheckApk => {

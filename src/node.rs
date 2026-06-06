@@ -1,7 +1,9 @@
 use serde::{Deserialize, Serialize};
+use serde_with::{DurationSeconds, serde_as};
 use std::time::Duration;
 use sysinfo::System;
 
+#[serde_as]
 #[derive(Debug, Serialize, Deserialize)]
 pub struct NodeInfo {
     pub hostname: String,
@@ -9,6 +11,7 @@ pub struct NodeInfo {
     pub os_id: String,
     pub arch: String,
     pub kernel: String,
+    #[serde_as(as = "DurationSeconds<u64>")]
     pub uptime: Duration,
 }
 
