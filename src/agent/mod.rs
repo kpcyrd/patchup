@@ -1,6 +1,7 @@
 pub mod config;
 pub mod patches;
 pub mod refresh;
+pub mod sandbox;
 
 use crate::args::Agent;
 use crate::errors::*;
@@ -113,6 +114,9 @@ async fn bind() -> Result<UnixListener> {
 
 pub async fn run(_config: Option<&Path>, _args: &Agent) -> Result<()> {
     let socket = bind().await?;
+
+    sandbox::init();
+
     let state = Arc::new(ArcSwap::from_pointee(State::default()));
 
     tokio::select! {

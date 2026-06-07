@@ -21,3 +21,6 @@ serde_with = { version = "3.21.0", default-features = false, features = ["macros
 sysinfo = { version = "0.39", default-features = false, features = ["system"] }
 tokio = { version = "1", features = ["fs", "io-std", "macros", "process", "rt-multi-thread"] }
 toml = "1"
+
+[target.'cfg(target_os="linux")'.dependencies]
+landlock = "0.4"
