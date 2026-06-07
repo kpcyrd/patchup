@@ -95,8 +95,9 @@ async fn bind() -> Result<UnixListener> {
         && let Some((name, fd)) = fds.into_iter().next()
     {
         info!(
-            "Received {} sockets from systemd, using first one: {name:?}",
-            num_fds
+            "Received {} sockets from systemd, using first one: {}",
+            num_fds,
+            name.map(|n| format!("{n:?}")).as_deref().unwrap_or("-")
         );
         let fd = fd.into_std();
         let fd = std::os::unix::net::UnixListener::from(fd);
