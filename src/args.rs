@@ -72,12 +72,18 @@ pub struct Agent {
 /// Show status of this host's agent
 #[derive(Debug, Clone, Parser)]
 pub struct Status {
+    // TODO: disabled for now, might reintroduce later
+    /*
     /// Reload the host status first
     #[arg(short, long)]
     pub refresh: bool,
+    */
     /// Output the status in JSON format
     #[arg(short, long)]
     pub json: bool,
+    /// The agent socket to connect to
+    #[arg(short = 'S', long, default_value = "/run/patchup.sock")]
+    pub socket: PathBuf,
 }
 
 /// Internal plumbing commands

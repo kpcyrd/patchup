@@ -86,7 +86,7 @@ async fn main() -> Result<()> {
             }
         }
         Subcommand::Status(args) => {
-            let mut sock = ipc::agent::AgentIpc::connect("data/agent/patchup-agent.sock").await?;
+            let mut sock = ipc::agent::AgentIpc::connect(&args.socket).await?;
             let status = sock.status().await?;
             if args.json {
                 let json = serde_json::to_string_pretty(&status)?;
