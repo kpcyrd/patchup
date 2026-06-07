@@ -1430,7 +1430,6 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_with",
- "ssh-key",
  "sysinfo",
  "tokio",
  "toml",
