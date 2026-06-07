@@ -109,6 +109,43 @@ async fn main() -> Result<()> {
                     "sha256:    ".bold(),
                     status.ssh_key.fingerprint(HashAlg::Sha256)
                 );
+
+                println!();
+                println!("{}", "updates:".bold());
+                if let Some(updates) = status.updates {
+                    if !updates.is_empty() {
+                        for (manager, status) in updates {
+                            let manager = format!("{manager}: ");
+
+                            let (num, nomen) = match status.pending.len() {
+                                0 => ("0".green(), "updates"),
+                                1 => ("1".yellow(), "update"),
+                                n => (n.to_string().yellow(), "updates"),
+                            };
+                            let hint = if status.refresh_error {
+                                " (failed to refresh)".red().bold()
+                            } else {
+                                Default::default()
+                            };
+                            println!(
+                                "  {:<8}  {} pending {}{}",
+                                manager.bold(),
+                                num.bold(),
+                                nomen,
+                                hint
+                            );
+
+                            for update in status.pending {
+                                println!("            - {}", update.name);
+                            }
+                        }
+                    } else {
+                        println!("  {}", "No package manager detected".italic());
+                    }
+                } else {
+                    // TODO: if overdue, show red warning
+                    println!("  {}", "Waiting for privileged process".italic());
+                }
             }
         }
         Subcommand::Plumbing(plumbing) => match plumbing {

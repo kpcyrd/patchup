@@ -3,6 +3,7 @@ pub mod patches;
 pub mod refresh;
 pub mod sandbox;
 
+use crate::agent::patches::UpdateStatus;
 use crate::args::Agent;
 use crate::errors::*;
 use crate::ipc;
@@ -10,6 +11,7 @@ use crate::keygen;
 use crate::node::NodeInfo;
 use arc_swap::ArcSwap;
 use russh::keys::PrivateKey;
+use std::collections::BTreeMap;
 use std::path::Path;
 use std::sync::Arc;
 use tokio::{
@@ -23,11 +25,15 @@ use tokio::{
 #[derive(Debug)]
 struct State {
     ssh_key: PrivateKey,
+    updates: Option<BTreeMap<String, UpdateStatus>>,
 }
 
 impl State {
     fn new(ssh_key: PrivateKey) -> Self {
-        Self { ssh_key }
+        Self {
+            ssh_key,
+            updates: None,
+        }
     }
 }
 
@@ -84,6 +90,7 @@ async fn serve_socket_client(state: Arc<ArcSwap<State>>, stream: UnixStream) -> 
                     &ipc::agent::Status {
                         ssh_key: state.ssh_key.public_key().clone(),
                         node: NodeInfo::query(),
+                        updates: state.updates.clone(),
                     },
                 )
                 .await?;

@@ -1,8 +1,10 @@
+use crate::agent::patches::UpdateStatus;
 use crate::errors::*;
 use crate::ipc;
 use crate::node::NodeInfo;
 use russh::keys::PublicKey;
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use std::path::Path;
 use tokio::io::BufStream;
 use tokio::net::UnixStream;
@@ -17,6 +19,7 @@ pub enum Request {
 pub struct Status {
     pub ssh_key: PublicKey,
     pub node: NodeInfo,
+    pub updates: Option<BTreeMap<String, UpdateStatus>>,
 }
 
 pub struct AgentIpc {
