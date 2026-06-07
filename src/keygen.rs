@@ -12,7 +12,7 @@ pub fn keygen() -> Result<PrivateKey> {
     let pubkey = privkey.public_key();
 
     let fp = pubkey.fingerprint(HashAlg::Sha256);
-    debug!("Generated ssh key: {fp}");
+    info!("Generated ssh key: {fp}");
 
     Ok(privkey)
 }
@@ -33,6 +33,8 @@ pub async fn init_from_path(path: &Path) -> Result<PrivateKey> {
     match fs::read_to_string(path).await {
         Ok(buf) => {
             let key = PrivateKey::from_openssh(buf)?;
+            let fp = key.public_key().fingerprint(HashAlg::Sha256);
+            info!("Loaded ssh key: {fp}");
             Ok(key)
         }
         Err(err) if err.kind() == ErrorKind::NotFound => {
@@ -40,6 +42,7 @@ pub async fn init_from_path(path: &Path) -> Result<PrivateKey> {
             let key = keygen()?;
             let mut file = fs::OpenOptions::new()
                 .create_new(true)
+                .write(true)
                 .mode(0o600)
                 .open(&path)
                 .await

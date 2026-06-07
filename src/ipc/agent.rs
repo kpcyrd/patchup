@@ -1,6 +1,7 @@
 use crate::errors::*;
 use crate::ipc;
 use crate::node::NodeInfo;
+use russh::keys::PublicKey;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use tokio::io::BufStream;
@@ -14,6 +15,7 @@ pub enum Request {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Status {
+    pub ssh_key: PublicKey,
     pub node: NodeInfo,
 }
 

@@ -6,8 +6,10 @@ pub mod sandbox;
 use crate::args::Agent;
 use crate::errors::*;
 use crate::ipc;
+use crate::keygen;
 use crate::node::NodeInfo;
 use arc_swap::ArcSwap;
+use russh::keys::PrivateKey;
 use std::path::Path;
 use std::sync::Arc;
 use tokio::{
@@ -18,9 +20,15 @@ use tokio::{
     time::{self, Duration},
 };
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 struct State {
-    // TODO
+    ssh_key: PrivateKey,
+}
+
+impl State {
+    fn new(ssh_key: PrivateKey) -> Self {
+        Self { ssh_key }
+    }
 }
 
 async fn connect(_state: &ArcSwap<State>) -> Result<()> {
@@ -59,7 +67,7 @@ async fn status_socket(state: &Arc<ArcSwap<State>>, socket: UnixListener) -> Res
     }
 }
 
-async fn serve_socket_client(_state: Arc<ArcSwap<State>>, stream: UnixStream) -> Result<()> {
+async fn serve_socket_client(state: Arc<ArcSwap<State>>, stream: UnixStream) -> Result<()> {
     let mut stream = BufStream::new(stream);
 
     loop {
@@ -70,9 +78,11 @@ async fn serve_socket_client(_state: Arc<ArcSwap<State>>, stream: UnixStream) ->
 
         match req {
             ipc::agent::Request::Status => {
+                let state = state.load();
                 ipc::send(
                     &mut stream,
                     &ipc::agent::Status {
+                        ssh_key: state.ssh_key.public_key().clone(),
                         node: NodeInfo::query(),
                     },
                 )
@@ -113,12 +123,15 @@ async fn bind() -> Result<UnixListener> {
     Ok(socket)
 }
 
-pub async fn run(_config: Option<&Path>, _args: &Agent) -> Result<()> {
+pub async fn run(_config: Option<&Path>, args: &Agent) -> Result<()> {
     let socket = bind().await?;
 
     sandbox::init();
 
-    let state = Arc::new(ArcSwap::from_pointee(State::default()));
+    let ssh_key_path = args.data.join("ssh.key");
+    let ssh_key = keygen::init_from_path(&ssh_key_path).await?;
+
+    let state = Arc::new(ArcSwap::from_pointee(State::new(ssh_key)));
 
     tokio::select! {
         res = connect(&state) => res,

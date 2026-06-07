@@ -43,6 +43,7 @@ pub async fn recv_opt<R: AsyncBufReadExt + Unpin, T: DeserializeOwned + fmt::Deb
             Ok(None)
         }
         Ok(_) => {
+            trace!("Received message bytes: {:?}", line);
             let msg = serde_json::from_str::<T>(&line)?;
             debug!("Received message: {:?}", msg);
             Ok(Some(msg))
