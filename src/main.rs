@@ -103,8 +103,12 @@ async fn main() -> Result<()> {
                 );
                 println!();
 
-                println!("{} {}", "ssh key: ".bold(), status.ssh_key.to_openssh()?);
-                println!("{} {}", "sha256:  ".bold(), status.ssh_key.fingerprint(HashAlg::Sha256));
+                println!("{} {}", "ssh key:   ".bold(), status.ssh_key.to_openssh()?);
+                println!(
+                    "{} {}",
+                    "sha256:    ".bold(),
+                    status.ssh_key.fingerprint(HashAlg::Sha256)
+                );
             }
         }
         Subcommand::Plumbing(plumbing) => match plumbing {
