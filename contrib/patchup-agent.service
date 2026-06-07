@@ -10,6 +10,7 @@ Environment=PATCHUP_AGENT_DATA=.
 DynamicUser=yes
 StateDirectory=patchup
 WorkingDirectory=/var/lib/patchup
+SyslogIdentifier=%N
 
 CapabilityBoundingSet=
 LockPersonality=yes
