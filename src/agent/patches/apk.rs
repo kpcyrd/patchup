@@ -1,4 +1,8 @@
 use crate::errors::*;
+use tokio::fs;
+use tokio::io::ErrorKind;
+
+const PATH: &str = "/lib/apk/db/installed";
 
 fn parse(data: &str) -> Vec<String> {
     data.lines()
@@ -7,7 +11,20 @@ fn parse(data: &str) -> Vec<String> {
         .collect()
 }
 
+pub async fn detect() -> bool {
+    fs::metadata(PATH)
+        .await
+        .err()
+        .filter(|err| err.kind() == ErrorKind::NotFound)
+        .is_none()
+}
+
 pub async fn run() -> Result<()> {
+    if !detect().await {
+        warn!("apk database not found, skipping");
+        return Ok(());
+    }
+
     let update = tokio::process::Command::new("apk")
         .arg("update")
         .output()

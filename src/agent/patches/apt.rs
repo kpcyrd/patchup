@@ -1,4 +1,8 @@
 use crate::errors::*;
+use tokio::fs;
+use tokio::io::ErrorKind;
+
+const PATH: &str = "/var/lib/dpkg/status";
 
 fn parse(data: &str) -> Vec<String> {
     let data = data.strip_prefix("Listing...\n").unwrap_or(data);
@@ -14,7 +18,20 @@ fn parse(data: &str) -> Vec<String> {
         .collect()
 }
 
+pub async fn detect() -> bool {
+    fs::metadata(PATH)
+        .await
+        .err()
+        .filter(|err| err.kind() == ErrorKind::NotFound)
+        .is_none()
+}
+
 pub async fn run() -> Result<()> {
+    if !detect().await {
+        warn!("apt database not found, skipping");
+        return Ok(());
+    }
+
     let update = tokio::process::Command::new("apt")
         .arg("update")
         .output()
