@@ -1,10 +1,11 @@
+use crate::agent::patches::{Update, UpdateStatus};
 use crate::errors::*;
 use tokio::fs;
 use tokio::io::ErrorKind;
 
 const PATH: &str = "/var/lib/dpkg/status";
 
-fn parse(data: &str) -> Vec<String> {
+fn parse(data: &str) -> Vec<Update> {
     let data = data.strip_prefix("Listing...\n").unwrap_or(data);
 
     data.lines()
@@ -13,7 +14,9 @@ fn parse(data: &str) -> Vec<String> {
             let (pkg, _component) = s.split_once('/').unwrap_or((s, ""));
             // TODO: security: check if component ends with `-security`
             // TODO: new version: $2
-            pkg.to_string()
+            Update {
+                name: pkg.to_string(),
+            }
         })
         .collect()
 }
@@ -26,11 +29,8 @@ pub async fn detect() -> bool {
         .is_none()
 }
 
-pub async fn run() -> Result<()> {
-    if !detect().await {
-        warn!("apt database not found, skipping");
-        return Ok(());
-    }
+pub async fn query() -> Result<UpdateStatus> {
+    let mut status = UpdateStatus::default();
 
     let update = tokio::process::Command::new("apt")
         .arg("update")
@@ -38,10 +38,11 @@ pub async fn run() -> Result<()> {
         .await
         .context("Failed to run apt update")?;
     if !update.status.success() {
-        bail!(
+        warn!(
             "apt update failed: {:?}",
             String::from_utf8_lossy(&update.stderr)
         );
+        status.refresh_error = true;
     }
 
     let list = tokio::process::Command::new("apt")
@@ -57,8 +58,20 @@ pub async fn run() -> Result<()> {
     }
 
     let stdout = String::from_utf8_lossy(&list.stdout);
-    let updates = parse(&stdout);
-    for update in updates {
+    status.pending = parse(&stdout);
+
+    Ok(status)
+}
+
+pub async fn run() -> Result<()> {
+    if !detect().await {
+        warn!("apt database not found, skipping");
+        return Ok(());
+    }
+
+    let status = query().await?;
+
+    for update in status.pending {
         info!("Update available: {update:?}");
     }
 
@@ -158,87 +171,249 @@ zlib1g/stable 1:1.3.dfsg+really1.3.1-1+b1 amd64 [upgradable from: 1:1.2.13.dfsg-
         assert_eq!(
             updates,
             vec![
-                "adduser",
-                "apt",
-                "base-files",
-                "base-passwd",
-                "bash",
-                "bsdutils",
-                "coreutils",
-                "dash",
-                "debconf",
-                "debian-archive-keyring",
-                "debianutils",
-                "diffutils",
-                "dpkg",
-                "e2fsprogs",
-                "findutils",
-                "gcc-12-base",
-                "gpgv",
-                "grep",
-                "gzip",
-                "hostname",
-                "init-system-helpers",
-                "libacl1",
-                "libattr1",
-                "libaudit-common",
-                "libaudit1",
-                "libblkid1",
-                "libbz2-1.0",
-                "libc-bin",
-                "libc6",
-                "libcap-ng0",
-                "libcap2",
-                "libcom-err2",
-                "libcrypt1",
-                "libdebconfclient0",
-                "libffi8",
-                "libgcc-s1",
-                "libgcrypt20",
-                "libgmp10",
-                "libgpg-error0",
-                "libidn2-0",
-                "liblz4-1",
-                "liblzma5",
-                "libmd0",
-                "libmount1",
-                "libp11-kit0",
-                "libpam-modules-bin",
-                "libpam-modules",
-                "libpam-runtime",
-                "libpam0g",
-                "libpcre2-8-0",
-                "libseccomp2",
-                "libselinux1",
-                "libsemanage-common",
-                "libsemanage2",
-                "libsepol2",
-                "libsmartcols1",
-                "libss2",
-                "libstdc++6",
-                "libsystemd0",
-                "libtasn1-6",
-                "libtinfo6",
-                "libudev1",
-                "libuuid1",
-                "libxxhash0",
-                "libzstd1",
-                "login",
-                "logsave",
-                "mawk",
-                "mount",
-                "ncurses-base",
-                "ncurses-bin",
-                "passwd",
-                "perl-base",
-                "sed",
-                "sysvinit-utils",
-                "tar",
-                "tzdata",
-                "usr-is-merged",
-                "util-linux-extra",
-                "util-linux",
-                "zlib1g",
+                Update {
+                    name: "adduser".to_string()
+                },
+                Update {
+                    name: "apt".to_string()
+                },
+                Update {
+                    name: "base-files".to_string()
+                },
+                Update {
+                    name: "base-passwd".to_string()
+                },
+                Update {
+                    name: "bash".to_string()
+                },
+                Update {
+                    name: "bsdutils".to_string()
+                },
+                Update {
+                    name: "coreutils".to_string()
+                },
+                Update {
+                    name: "dash".to_string()
+                },
+                Update {
+                    name: "debconf".to_string()
+                },
+                Update {
+                    name: "debian-archive-keyring".to_string()
+                },
+                Update {
+                    name: "debianutils".to_string()
+                },
+                Update {
+                    name: "diffutils".to_string()
+                },
+                Update {
+                    name: "dpkg".to_string()
+                },
+                Update {
+                    name: "e2fsprogs".to_string()
+                },
+                Update {
+                    name: "findutils".to_string()
+                },
+                Update {
+                    name: "gcc-12-base".to_string()
+                },
+                Update {
+                    name: "gpgv".to_string()
+                },
+                Update {
+                    name: "grep".to_string()
+                },
+                Update {
+                    name: "gzip".to_string()
+                },
+                Update {
+                    name: "hostname".to_string()
+                },
+                Update {
+                    name: "init-system-helpers".to_string()
+                },
+                Update {
+                    name: "libacl1".to_string()
+                },
+                Update {
+                    name: "libattr1".to_string()
+                },
+                Update {
+                    name: "libaudit-common".to_string()
+                },
+                Update {
+                    name: "libaudit1".to_string()
+                },
+                Update {
+                    name: "libblkid1".to_string()
+                },
+                Update {
+                    name: "libbz2-1.0".to_string()
+                },
+                Update {
+                    name: "libc-bin".to_string()
+                },
+                Update {
+                    name: "libc6".to_string()
+                },
+                Update {
+                    name: "libcap-ng0".to_string()
+                },
+                Update {
+                    name: "libcap2".to_string()
+                },
+                Update {
+                    name: "libcom-err2".to_string()
+                },
+                Update {
+                    name: "libcrypt1".to_string()
+                },
+                Update {
+                    name: "libdebconfclient0".to_string()
+                },
+                Update {
+                    name: "libffi8".to_string()
+                },
+                Update {
+                    name: "libgcc-s1".to_string()
+                },
+                Update {
+                    name: "libgcrypt20".to_string()
+                },
+                Update {
+                    name: "libgmp10".to_string()
+                },
+                Update {
+                    name: "libgpg-error0".to_string()
+                },
+                Update {
+                    name: "libidn2-0".to_string()
+                },
+                Update {
+                    name: "liblz4-1".to_string()
+                },
+                Update {
+                    name: "liblzma5".to_string()
+                },
+                Update {
+                    name: "libmd0".to_string()
+                },
+                Update {
+                    name: "libmount1".to_string()
+                },
+                Update {
+                    name: "libp11-kit0".to_string()
+                },
+                Update {
+                    name: "libpam-modules-bin".to_string()
+                },
+                Update {
+                    name: "libpam-modules".to_string()
+                },
+                Update {
+                    name: "libpam-runtime".to_string()
+                },
+                Update {
+                    name: "libpam0g".to_string()
+                },
+                Update {
+                    name: "libpcre2-8-0".to_string()
+                },
+                Update {
+                    name: "libseccomp2".to_string()
+                },
+                Update {
+                    name: "libselinux1".to_string()
+                },
+                Update {
+                    name: "libsemanage-common".to_string()
+                },
+                Update {
+                    name: "libsemanage2".to_string()
+                },
+                Update {
+                    name: "libsepol2".to_string()
+                },
+                Update {
+                    name: "libsmartcols1".to_string()
+                },
+                Update {
+                    name: "libss2".to_string()
+                },
+                Update {
+                    name: "libstdc++6".to_string()
+                },
+                Update {
+                    name: "libsystemd0".to_string()
+                },
+                Update {
+                    name: "libtasn1-6".to_string()
+                },
+                Update {
+                    name: "libtinfo6".to_string()
+                },
+                Update {
+                    name: "libudev1".to_string()
+                },
+                Update {
+                    name: "libuuid1".to_string()
+                },
+                Update {
+                    name: "libxxhash0".to_string()
+                },
+                Update {
+                    name: "libzstd1".to_string()
+                },
+                Update {
+                    name: "login".to_string()
+                },
+                Update {
+                    name: "logsave".to_string()
+                },
+                Update {
+                    name: "mawk".to_string()
+                },
+                Update {
+                    name: "mount".to_string()
+                },
+                Update {
+                    name: "ncurses-base".to_string()
+                },
+                Update {
+                    name: "ncurses-bin".to_string()
+                },
+                Update {
+                    name: "passwd".to_string()
+                },
+                Update {
+                    name: "perl-base".to_string()
+                },
+                Update {
+                    name: "sed".to_string()
+                },
+                Update {
+                    name: "sysvinit-utils".to_string()
+                },
+                Update {
+                    name: "tar".to_string()
+                },
+                Update {
+                    name: "tzdata".to_string()
+                },
+                Update {
+                    name: "usr-is-merged".to_string()
+                },
+                Update {
+                    name: "util-linux-extra".to_string()
+                },
+                Update {
+                    name: "util-linux".to_string()
+                },
+                Update {
+                    name: "zlib1g".to_string()
+                },
             ]
         );
     }
@@ -246,6 +421,6 @@ zlib1g/stable 1:1.3.dfsg+really1.3.1-1+b1 amd64 [upgradable from: 1:1.2.13.dfsg-
     #[test]
     fn test_parse_empty() {
         let updates = parse("");
-        assert_eq!(updates, Vec::<String>::new());
+        assert_eq!(updates, &[]);
     }
 }
