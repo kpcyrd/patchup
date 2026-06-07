@@ -84,4 +84,5 @@ pub struct Status {
 #[derive(Debug, Clone, Parser)]
 pub enum Plumbing {
     CheckApk,
+    CheckApt,
 }

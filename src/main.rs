@@ -107,6 +107,9 @@ async fn main() -> Result<()> {
             Plumbing::CheckApk => {
                 agent::patches::apk::run().await?;
             }
+            Plumbing::CheckApt => {
+                agent::patches::apt::run().await?;
+            }
         },
     }
 
