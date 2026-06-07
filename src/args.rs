@@ -63,9 +63,9 @@ pub struct Agent {
     pub addr: Option<SocketAddr>,
     /// The data directory to use
     #[arg(short = 'D', long, env = "PATCHUP_AGENT_DATA")]
-    pub data: PathBuf,
+    pub data: Option<PathBuf>,
     /// Connect as privileged process to socket to refresh patch status
-    #[arg(long)]
+    #[arg(short = 'R', long)]
     pub refresh: Option<PathBuf>,
 }
 

@@ -5,7 +5,7 @@ Requires=patchup-agent.socket patchup-agent-refresh.timer
 Wants=network-online.target
 
 [Service]
-ExecStart=/usr/bin/patchup agent 127.0.0.1:2424 -vv
+ExecStart=/usr/bin/patchup agent -vv
 Environment=PATCHUP_AGENT_DATA=.
 DynamicUser=yes
 StateDirectory=patchup

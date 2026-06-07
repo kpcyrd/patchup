@@ -124,11 +124,19 @@ async fn bind() -> Result<UnixListener> {
 }
 
 pub async fn run(_config: Option<&Path>, args: &Agent) -> Result<()> {
-    let socket = bind().await?;
+    let data_dir = args
+        .data
+        .as_ref()
+        .context("Data directory is required to start agent")?;
 
+    fs::create_dir_all(data_dir)
+        .await
+        .with_context(|| format!("Failed to create directory: {data_dir:?}"))?;
+
+    let socket = bind().await?;
     sandbox::init();
 
-    let ssh_key_path = args.data.join("ssh.key");
+    let ssh_key_path = data_dir.join("ssh.key");
     let ssh_key = keygen::init_from_path(&ssh_key_path).await?;
 
     let state = Arc::new(ArcSwap::from_pointee(State::new(ssh_key)));
