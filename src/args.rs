@@ -78,17 +78,29 @@ pub struct Status {
     #[arg(short, long)]
     pub refresh: bool,
     */
-    /// Output the status in JSON format
-    #[arg(short, long)]
-    pub json: bool,
     /// The agent socket to connect to
     #[arg(short = 'S', long, default_value = "/run/patchup.sock")]
     pub socket: PathBuf,
+    #[command(flatten)]
+    pub output: Output,
 }
 
 /// Internal plumbing commands
 #[derive(Debug, Clone, Parser)]
 pub enum Plumbing {
-    CheckApk,
-    CheckApt,
+    CheckApk {
+        #[command(flatten)]
+        output: Output,
+    },
+    CheckApt {
+        #[command(flatten)]
+        output: Output,
+    },
+}
+
+#[derive(Debug, Clone, Parser)]
+pub struct Output {
+    /// Output the status in JSON format
+    #[arg(short, long)]
+    pub json: bool,
 }

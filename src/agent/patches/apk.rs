@@ -1,4 +1,5 @@
 use crate::agent::patches::{Update, UpdateStatus};
+use crate::args::Output;
 use crate::errors::*;
 use tokio::fs;
 use tokio::io::ErrorKind;
@@ -57,7 +58,7 @@ pub async fn query() -> Result<UpdateStatus> {
     Ok(status)
 }
 
-pub async fn run() -> Result<()> {
+pub async fn run(output: &Output) -> Result<()> {
     if !detect().await {
         warn!("apk database not found, skipping");
         return Ok(());
@@ -65,8 +66,13 @@ pub async fn run() -> Result<()> {
 
     let status = query().await?;
 
-    for update in status.pending {
-        info!("Update available: {update:?}");
+    if output.json {
+        let json = serde_json::to_string_pretty(&status)?;
+        println!("{json}");
+    } else {
+        for update in status.pending {
+            info!("Update available: {update:?}");
+        }
     }
 
     Ok(())

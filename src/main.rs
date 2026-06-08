@@ -88,7 +88,7 @@ async fn main() -> Result<()> {
         Subcommand::Status(args) => {
             let mut sock = ipc::agent::AgentIpc::connect(&args.socket).await?;
             let status = sock.status().await?;
-            if args.json {
+            if args.output.json {
                 let json = serde_json::to_string_pretty(&status)?;
                 println!("{json}");
             } else {
@@ -149,11 +149,11 @@ async fn main() -> Result<()> {
             }
         }
         Subcommand::Plumbing(plumbing) => match plumbing {
-            Plumbing::CheckApk => {
-                agent::patches::apk::run().await?;
+            Plumbing::CheckApk { output } => {
+                agent::patches::apk::run(output).await?;
             }
-            Plumbing::CheckApt => {
-                agent::patches::apt::run().await?;
+            Plumbing::CheckApt { output } => {
+                agent::patches::apt::run(output).await?;
             }
         },
     }
