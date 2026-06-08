@@ -33,6 +33,7 @@ pub async fn detect() -> bool {
 pub async fn query() -> Result<UpdateStatus> {
     let mut status = UpdateStatus::default();
 
+    debug!("Running apt update");
     let update = tokio::process::Command::new("apt")
         .arg("update")
         .output()
@@ -46,6 +47,7 @@ pub async fn query() -> Result<UpdateStatus> {
         status.refresh_error = true;
     }
 
+    debug!("Running apt list --upgradable");
     let list = tokio::process::Command::new("apt")
         .args(["list", "--upgradable"])
         .output()

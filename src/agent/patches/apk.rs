@@ -26,6 +26,7 @@ pub async fn detect() -> bool {
 pub async fn query() -> Result<UpdateStatus> {
     let mut status = UpdateStatus::default();
 
+    debug!("Running apk update");
     let update = tokio::process::Command::new("apk")
         .arg("update")
         .output()
@@ -40,6 +41,7 @@ pub async fn query() -> Result<UpdateStatus> {
         status.refresh_error = true;
     }
 
+    debug!("Running apk list --upgradable");
     let list = tokio::process::Command::new("apk")
         .args(["list", "--upgradable"])
         .output()
