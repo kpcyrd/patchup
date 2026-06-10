@@ -226,6 +226,8 @@ async fn bind() -> Result<UnixListener> {
         );
         let fd = fd.into_std();
         let fd = std::os::unix::net::UnixListener::from(fd);
+        fd.set_nonblocking(true)
+            .context("Failed to set socket non-blocking")?;
         UnixListener::from_std(fd).context("Failed to use sd-listen socket from systemd")?
     } else {
         // TODO: use proper path
