@@ -83,7 +83,7 @@ enum TaskEvent {
     SetUpdates(BTreeMap<String, UpdateStatus>),
 }
 
-async fn connect(_state: &ArcSwap<State>, _tx: &mpsc::Sender<TaskEvent>) -> Result<()> {
+async fn connect(_state: &Arc<ArcSwap<State>>, _tx: &mpsc::Sender<TaskEvent>) -> Result<()> {
     loop {
         debug!("connect");
         time::sleep(Duration::from_secs(5)).await
@@ -91,7 +91,10 @@ async fn connect(_state: &ArcSwap<State>, _tx: &mpsc::Sender<TaskEvent>) -> Resu
 }
 
 // Only this task is allowed to update the state
-async fn state_machine(state: &ArcSwap<State>, mut rx: mpsc::Receiver<TaskEvent>) -> Result<()> {
+async fn state_machine(
+    state: &Arc<ArcSwap<State>>,
+    mut rx: mpsc::Receiver<TaskEvent>,
+) -> Result<()> {
     loop {
         let Some(msg) = rx.recv().await else {
             break Ok(());
