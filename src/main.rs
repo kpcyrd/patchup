@@ -22,12 +22,13 @@ use tokio::io::AsyncReadExt;
 async fn main() -> Result<()> {
     let args = Args::parse();
 
-    let log_level = match args.verbose {
-        0 => "info",
-        1 => "info,patchup=debug",
-        2 => "debug",
-        3 => "debug,patchup=trace",
-        _ => "trace",
+    let log_level = match (args.quiet, args.verbose) {
+        (true, _) => "error",
+        (_, 0) => "info",
+        (_, 1) => "info,patchup=debug",
+        (_, 2) => "debug",
+        (_, 3) => "debug,patchup=trace",
+        (_, _) => "trace",
     };
     env_logger::Builder::from_env(Env::default().default_filter_or(log_level)).init();
 

@@ -8,6 +8,9 @@ pub struct Args {
     /// Increase logging output (can be used multiple times)
     #[arg(short, long, global = true, action(ArgAction::Count))]
     pub verbose: u8,
+    /// Silent output (except errors)
+    #[arg(short, long, global = true)]
+    pub quiet: bool,
     /// Use a specific config file instead of auto-detect
     #[arg(short, long, global = true)]
     pub config: Option<PathBuf>,

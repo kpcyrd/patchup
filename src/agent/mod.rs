@@ -6,7 +6,7 @@ pub mod sandbox;
 use crate::agent::patches::UpdateStatus;
 use crate::args::Agent;
 use crate::errors::*;
-use crate::ipc;
+use crate::ipc::{self, agent::OfferRequest};
 use crate::keygen;
 use crate::node::NodeInfo;
 use arc_swap::ArcSwap;
@@ -18,11 +18,12 @@ use tokio::{
     fs,
     io::BufStream,
     net::{UnixListener, UnixStream},
+    sync::mpsc,
     task::JoinSet,
     time::{self, Duration},
 };
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct State {
     ssh_key: PrivateKey,
     updates: Option<BTreeMap<String, UpdateStatus>>,
@@ -37,43 +38,66 @@ impl State {
     }
 }
 
-async fn connect(_state: &ArcSwap<State>) -> Result<()> {
+enum TaskEvent {
+    SetUpdates(BTreeMap<String, UpdateStatus>),
+}
+
+async fn connect(_state: &ArcSwap<State>, _tx: &mpsc::Sender<TaskEvent>) -> Result<()> {
     loop {
         debug!("connect");
         time::sleep(Duration::from_secs(5)).await
     }
 }
 
-async fn query(_state: &ArcSwap<State>) -> Result<()> {
+// Only this task is allowed to update the state
+async fn state_machine(state: &ArcSwap<State>, mut rx: mpsc::Receiver<TaskEvent>) -> Result<()> {
     loop {
-        debug!("query");
-        time::sleep(Duration::from_secs(5)).await
+        let Some(msg) = rx.recv().await else {
+            break Ok(());
+        };
+
+        match msg {
+            TaskEvent::SetUpdates(updates) => {
+                let mut new = state.load().as_ref().clone();
+                new.updates = Some(updates);
+                state.store(Arc::new(new));
+            }
+        }
     }
 }
 
-async fn status_socket(state: &Arc<ArcSwap<State>>, socket: UnixListener) -> Result<()> {
+async fn ipc_socket(
+    state: &Arc<ArcSwap<State>>,
+    socket: UnixListener,
+    tx: &mpsc::Sender<TaskEvent>,
+) -> Result<()> {
     let mut set = JoinSet::new();
     loop {
         tokio::select! {
             Some(Ok(res)) = set.join_next() => {
                 match res {
-                    Ok(()) => debug!("Status socket client disconnected: {res:?}"),
-                    Err(err) => warn!("Status socket client error: {err:?}"),
+                    Ok(()) => debug!("IPC socket client disconnected: {res:?}"),
+                    Err(err) => warn!("IPC socket client error: {err:?}"),
                 }
             }
             res = socket.accept() => {
                 let (stream, _addr) = res?;
                 info!("Accepted unix socket connection");
                 let state = state.clone();
+                let tx = tx.clone();
                 set.spawn(async move {
-                    serve_socket_client(state, stream).await
+                    serve_socket_client(state, stream, tx).await
                 });
             }
         }
     }
 }
 
-async fn serve_socket_client(state: Arc<ArcSwap<State>>, stream: UnixStream) -> Result<()> {
+async fn serve_socket_client(
+    state: Arc<ArcSwap<State>>,
+    stream: UnixStream,
+    tx: mpsc::Sender<TaskEvent>,
+) -> Result<()> {
     let mut stream = BufStream::new(stream);
 
     loop {
@@ -97,8 +121,31 @@ async fn serve_socket_client(state: Arc<ArcSwap<State>>, stream: UnixStream) -> 
             }
             ipc::agent::Request::Refresh { mandatory } => {
                 info!("Received refresh offer (mandatory={mandatory})");
-                // TODO: This is currently not implemented yet
-                ipc::send(&mut stream, &()).await?;
+
+                ipc::send(&mut stream, &OfferRequest::ListPkgBackends).await?;
+                let backends = ipc::recv::<_, Vec<String>>(&mut stream).await?;
+                info!("Received pkg backends: {backends:?}");
+
+                let mut updates = BTreeMap::new();
+
+                for backend in &backends {
+                    debug!("Querying pkg backend: {backend}");
+                    ipc::send(
+                        &mut stream,
+                        &OfferRequest::QueryPkgBackend {
+                            name: backend.clone(),
+                        },
+                    )
+                    .await?;
+                    let status = ipc::recv::<_, UpdateStatus>(&mut stream).await?;
+                    info!("Received status for {backend}: {status:?}");
+                    updates.insert(backend.clone(), status);
+                }
+
+                tx.send(TaskEvent::SetUpdates(updates)).await?;
+
+                // We are done, disconnect the remote process
+                break;
             }
         }
     }
@@ -147,10 +194,11 @@ pub async fn run(_config: Option<&Path>, args: &Agent) -> Result<()> {
     let ssh_key = keygen::init_from_path(&ssh_key_path).await?;
 
     let state = Arc::new(ArcSwap::from_pointee(State::new(ssh_key)));
+    let (tx, rx) = mpsc::channel(5);
 
     tokio::select! {
-        res = connect(&state) => res,
-        res = query(&state) => res,
-        res = status_socket(&state, socket) => res,
+        res = connect(&state, &tx) => res,
+        res = state_machine(&state, rx) => res,
+        res = ipc_socket(&state, socket, &tx) => res,
     }
 }

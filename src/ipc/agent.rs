@@ -1,4 +1,4 @@
-use crate::agent::patches::UpdateStatus;
+use crate::agent::patches::{self, UpdateStatus};
 use crate::errors::*;
 use crate::ipc;
 use crate::node::NodeInfo;
@@ -13,6 +13,12 @@ use tokio::net::UnixStream;
 pub enum Request {
     Status,
     Refresh { mandatory: bool },
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub enum OfferRequest {
+    ListPkgBackends,
+    QueryPkgBackend { name: String },
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -46,7 +52,33 @@ impl AgentIpc {
 
     pub async fn offer_refresh(&mut self, mandatory: bool) -> Result<()> {
         ipc::send(&mut self.stream, &Request::Refresh { mandatory }).await?;
-        let msg = ipc::recv(&mut self.stream).await?;
-        Ok(msg)
+
+        while let Some(msg) = ipc::recv_opt::<_, OfferRequest>(&mut self.stream).await? {
+            match msg {
+                OfferRequest::ListPkgBackends => {
+                    let backends = [
+                        (patches::apk::ID, patches::apk::detect().await),
+                        (patches::apt::ID, patches::apt::detect().await),
+                    ]
+                    .into_iter()
+                    .filter(|(_, detected)| *detected)
+                    .map(|(name, _)| name)
+                    .collect::<Vec<_>>();
+
+                    debug!("Offering detected pkg backends: {backends:?}");
+                    ipc::send(&mut self.stream, &backends).await?;
+                }
+                OfferRequest::QueryPkgBackend { name } => {
+                    let updates = match name.as_str() {
+                        patches::apk::ID => patches::apk::query().await?,
+                        patches::apt::ID => patches::apt::query().await?,
+                        _ => break,
+                    };
+                    ipc::send(&mut self.stream, &updates).await?;
+                }
+            }
+        }
+
+        Ok(())
     }
 }

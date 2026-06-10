@@ -4,4 +4,4 @@ PartOf=patchup-agent.service
 
 [Timer]
 OnActiveSec=15sec
-OnUnitActiveSec=15min
+OnUnitActiveSec=5min

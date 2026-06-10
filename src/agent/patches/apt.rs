@@ -4,6 +4,7 @@ use crate::errors::*;
 use tokio::fs;
 use tokio::io::ErrorKind;
 
+pub const ID: &str = "apt";
 const PATH: &str = "/var/lib/dpkg/status";
 
 fn parse(data: &str) -> Vec<Update> {

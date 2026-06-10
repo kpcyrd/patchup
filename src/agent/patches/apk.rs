@@ -4,6 +4,7 @@ use crate::errors::*;
 use tokio::fs;
 use tokio::io::ErrorKind;
 
+pub const ID: &str = "apk";
 const PATH: &str = "/lib/apk/db/installed";
 
 fn parse(data: &str) -> Vec<Update> {
