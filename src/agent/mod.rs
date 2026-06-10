@@ -18,13 +18,14 @@ use tokio::{
     fs,
     io::BufStream,
     net::{UnixListener, UnixStream},
-    sync::mpsc,
+    sync::{Notify, mpsc},
     task::JoinSet,
     time::{self, Duration},
 };
 
 pub const PATCH_REFRESH_INTERVAL: Duration = Duration::from_secs(60 * 60); // 1 hour
 pub const OFFER_DEADLINE: Duration = Duration::from_secs(60 * 7); // 7 minutes
+pub const HUB_PING_INTERVAL: Duration = Duration::from_secs(60 * 15); // 15 minutes
 
 #[derive(Debug, Clone)]
 struct State {
@@ -83,16 +84,48 @@ enum TaskEvent {
     SetUpdates(BTreeMap<String, UpdateStatus>),
 }
 
-async fn connect(_state: &Arc<ArcSwap<State>>, _tx: &mpsc::Sender<TaskEvent>) -> Result<()> {
+async fn connect(
+    state: &Arc<ArcSwap<State>>,
+    notify: &Notify,
+    _tx: &mpsc::Sender<TaskEvent>,
+) -> Result<()> {
+    let mut last_updates = state.load().updates.clone();
+    let mut interval = time::interval(HUB_PING_INTERVAL);
+
     loop {
-        debug!("connect");
-        time::sleep(Duration::from_secs(5)).await
+        let due = tokio::select! {
+            _ = interval.tick() => {
+                debug!("Timer for periodic hub ping ticked");
+                true
+            }
+            _ = notify.notified() => {
+                debug!("Received notify from state machine to inspect state and possibly notify hub");
+                false
+            }
+        };
+
+        let state = state.load();
+        debug!("state={:?}", state);
+
+        // TODO: also notify hub if timers are overdue
+
+        if due {
+            debug!("Periodic hub ping, we should notify hub");
+            last_updates = state.updates.clone();
+        } else if last_updates != state.updates {
+            // This only executes if we got notified, the timer hasn't ticked,
+            // but our internal state has changed, so notify the hub and reset the timer
+            info!("Updates changed, we should notify hub");
+            last_updates = state.updates.clone();
+            interval.reset();
+        }
     }
 }
 
 // Only this task is allowed to update the state
 async fn state_machine(
     state: &Arc<ArcSwap<State>>,
+    notify: &Notify,
     mut rx: mpsc::Receiver<TaskEvent>,
 ) -> Result<()> {
     loop {
@@ -113,6 +146,8 @@ async fn state_machine(
                 new.updates = Some(updates);
                 new.timers.last_refresh = Some(time::Instant::now());
                 state.store(Arc::new(new));
+
+                notify.notify_one();
             }
         }
     }
@@ -258,10 +293,11 @@ pub async fn run(_config: Option<&Path>, args: &Agent) -> Result<()> {
 
     let state = Arc::new(ArcSwap::from_pointee(State::new(ssh_key)));
     let (tx, rx) = mpsc::channel(5);
+    let notify = Notify::new();
 
     tokio::select! {
-        res = connect(&state, &tx) => res,
-        res = state_machine(&state, rx) => res,
+        res = connect(&state, &notify, &tx) => res,
+        res = state_machine(&state, &notify, rx) => res,
         res = ipc_socket(&state, socket, &tx) => res,
     }
 }
