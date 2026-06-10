@@ -1,11 +1,14 @@
+use crate::agent;
 use crate::agent::patches::{self, UpdateStatus};
 use crate::errors::*;
 use crate::ipc;
 use crate::node::NodeInfo;
 use russh::keys::PublicKey;
 use serde::{Deserialize, Serialize};
+use serde_with::{DurationSeconds, serde_as};
 use std::collections::BTreeMap;
 use std::path::Path;
+use std::time::Duration;
 use tokio::io::BufStream;
 use tokio::net::UnixStream;
 
@@ -25,7 +28,29 @@ pub enum OfferRequest {
 pub struct Status {
     pub ssh_key: PublicKey,
     pub node: NodeInfo,
+    pub timers: Timers,
     pub updates: Option<BTreeMap<String, UpdateStatus>>,
+}
+
+#[serde_as]
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Timers {
+    #[serde_as(as = "DurationSeconds<u64>")]
+    pub agent_uptime: Duration,
+    #[serde_as(as = "Option<DurationSeconds<u64>>")]
+    pub last_refresh: Option<Duration>,
+    #[serde_as(as = "Option<DurationSeconds<u64>>")]
+    pub last_refresh_offer: Option<Duration>,
+}
+
+impl Timers {
+    pub fn refresh_offer_overdue(&self) -> bool {
+        if let Some(last_refresh_offer) = self.last_refresh_offer {
+            last_refresh_offer > agent::PATCH_REFRESH_INTERVAL + agent::OFFER_DEADLINE
+        } else {
+            self.agent_uptime > agent::OFFER_DEADLINE
+        }
+    }
 }
 
 pub struct AgentIpc {

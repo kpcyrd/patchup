@@ -144,8 +144,12 @@ async fn main() -> Result<()> {
                         println!("  {}", "No package manager detected".italic());
                     }
                 } else {
-                    // TODO: if overdue, show red warning
                     println!("  {}", "Waiting for privileged process".italic());
+                }
+
+                if status.timers.refresh_offer_overdue() {
+                    println!();
+                    println!("  {}", "Periodic privileged process is overdue, cronjob/timer may not be configured correctly".red().bold());
                 }
             }
         }

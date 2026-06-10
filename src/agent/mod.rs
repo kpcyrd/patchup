@@ -23,9 +23,13 @@ use tokio::{
     time::{self, Duration},
 };
 
+pub const PATCH_REFRESH_INTERVAL: Duration = Duration::from_secs(60 * 60); // 1 hour
+pub const OFFER_DEADLINE: Duration = Duration::from_secs(60 * 7); // 7 minutes
+
 #[derive(Debug, Clone)]
 struct State {
     ssh_key: PrivateKey,
+    timers: Timers,
     updates: Option<BTreeMap<String, UpdateStatus>>,
 }
 
@@ -33,12 +37,49 @@ impl State {
     fn new(ssh_key: PrivateKey) -> Self {
         Self {
             ssh_key,
+            timers: Timers::default(),
             updates: None,
         }
     }
 }
 
+#[derive(Debug, Clone)]
+struct Timers {
+    agent_uptime: time::Instant,
+    last_refresh: Option<time::Instant>,
+    last_refresh_offer: Option<time::Instant>,
+}
+
+impl Default for Timers {
+    fn default() -> Self {
+        Self {
+            agent_uptime: time::Instant::now(),
+            last_refresh: None,
+            last_refresh_offer: None,
+        }
+    }
+}
+
+impl Timers {
+    fn elapsed(&self) -> ipc::agent::Timers {
+        let now = time::Instant::now();
+        ipc::agent::Timers {
+            agent_uptime: now.duration_since(self.agent_uptime),
+            last_refresh: self.last_refresh.map(|t| now.duration_since(t)),
+            last_refresh_offer: self.last_refresh_offer.map(|t| now.duration_since(t)),
+        }
+    }
+
+    fn refresh_due(&self) -> bool {
+        let Some(last) = self.last_refresh else {
+            return true;
+        };
+        last.elapsed() >= PATCH_REFRESH_INTERVAL
+    }
+}
+
 enum TaskEvent {
+    RefreshOffered,
     SetUpdates(BTreeMap<String, UpdateStatus>),
 }
 
@@ -57,9 +98,15 @@ async fn state_machine(state: &ArcSwap<State>, mut rx: mpsc::Receiver<TaskEvent>
         };
 
         match msg {
+            TaskEvent::RefreshOffered => {
+                let mut new = state.load().as_ref().clone();
+                new.timers.last_refresh_offer = Some(time::Instant::now());
+                state.store(Arc::new(new));
+            }
             TaskEvent::SetUpdates(updates) => {
                 let mut new = state.load().as_ref().clone();
                 new.updates = Some(updates);
+                new.timers.last_refresh = Some(time::Instant::now());
                 state.store(Arc::new(new));
             }
         }
@@ -114,6 +161,7 @@ async fn serve_socket_client(
                     &ipc::agent::Status {
                         ssh_key: state.ssh_key.public_key().clone(),
                         node: NodeInfo::query(),
+                        timers: state.timers.elapsed(),
                         updates: state.updates.clone(),
                     },
                 )
@@ -121,28 +169,35 @@ async fn serve_socket_client(
             }
             ipc::agent::Request::Refresh { mandatory } => {
                 info!("Received refresh offer (mandatory={mandatory})");
+                tx.send(TaskEvent::RefreshOffered).await?;
 
-                ipc::send(&mut stream, &OfferRequest::ListPkgBackends).await?;
-                let backends = ipc::recv::<_, Vec<String>>(&mut stream).await?;
-                info!("Received pkg backends: {backends:?}");
+                if mandatory || state.load().timers.refresh_due() {
+                    debug!("Accepting refresh offer");
 
-                let mut updates = BTreeMap::new();
+                    ipc::send(&mut stream, &OfferRequest::ListPkgBackends).await?;
+                    let backends = ipc::recv::<_, Vec<String>>(&mut stream).await?;
+                    info!("Received pkg backends: {backends:?}");
 
-                for backend in &backends {
-                    debug!("Querying pkg backend: {backend}");
-                    ipc::send(
-                        &mut stream,
-                        &OfferRequest::QueryPkgBackend {
-                            name: backend.clone(),
-                        },
-                    )
-                    .await?;
-                    let status = ipc::recv::<_, UpdateStatus>(&mut stream).await?;
-                    info!("Received status for {backend}: {status:?}");
-                    updates.insert(backend.clone(), status);
+                    let mut updates = BTreeMap::new();
+
+                    for backend in &backends {
+                        debug!("Querying pkg backend: {backend}");
+                        ipc::send(
+                            &mut stream,
+                            &OfferRequest::QueryPkgBackend {
+                                name: backend.clone(),
+                            },
+                        )
+                        .await?;
+                        let status = ipc::recv::<_, UpdateStatus>(&mut stream).await?;
+                        info!("Received status for {backend}: {status:?}");
+                        updates.insert(backend.clone(), status);
+                    }
+
+                    tx.send(TaskEvent::SetUpdates(updates)).await?;
+                } else {
+                    debug!("Declining refresh offer, not due yet");
                 }
-
-                tx.send(TaskEvent::SetUpdates(updates)).await?;
 
                 // We are done, disconnect the remote process
                 break;
