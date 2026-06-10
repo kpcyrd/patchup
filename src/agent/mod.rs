@@ -102,11 +102,13 @@ async fn state_machine(
 
         match msg {
             TaskEvent::RefreshOffered => {
+                debug!("Updating refresh offer timer");
                 let mut new = state.load().as_ref().clone();
                 new.timers.last_refresh_offer = Some(time::Instant::now());
                 state.store(Arc::new(new));
             }
             TaskEvent::SetUpdates(updates) => {
+                debug!("Updating package manager update status");
                 let mut new = state.load().as_ref().clone();
                 new.updates = Some(updates);
                 new.timers.last_refresh = Some(time::Instant::now());
@@ -197,6 +199,7 @@ async fn serve_socket_client(
                         updates.insert(backend.clone(), status);
                     }
 
+                    debug!("Finished querying pkg backends");
                     tx.send(TaskEvent::SetUpdates(updates)).await?;
                 } else {
                     debug!("Declining refresh offer, not due yet");
