@@ -1,6 +1,7 @@
 use crate::errors::*;
+use crate::ssh;
 use russh::{
-    Channel, ChannelId, MethodKind, MethodSet, SshId,
+    Channel, ChannelId, MethodKind, MethodSet,
     keys::{PrivateKey, PublicKey},
     server::{Auth, Msg, Server, Session},
 };
@@ -8,9 +9,6 @@ use std::collections::BTreeMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
-
-pub const KEEPALIVE_INTERVAL: Duration = Duration::from_secs(90);
-pub const KEEPALIVE_MAX: u32 = 2;
 
 pub struct SshServer {
     // shared: Arc<hub::Shared>,
@@ -29,10 +27,10 @@ impl SshServer {
 
     pub async fn run(&mut self, key: PrivateKey, bind: SocketAddr) -> Result<()> {
         let config = russh::server::Config {
-            server_id: SshId::Standard("SSH-2.0-flowers-are-blooming-in-antarctica".into()),
+            server_id: ssh::ID,
             methods: MethodSet::from([MethodKind::PublicKey].as_slice()),
-            keepalive_interval: Some(KEEPALIVE_INTERVAL),
-            keepalive_max: KEEPALIVE_MAX as usize,
+            keepalive_interval: Some(ssh::KEEPALIVE_INTERVAL),
+            keepalive_max: ssh::KEEPALIVE_MAX as usize,
             auth_rejection_time: Duration::from_millis(250),
             auth_rejection_time_initial: Some(Duration::from_secs(0)),
             keys: vec![key],

@@ -2,6 +2,7 @@ pub mod config;
 pub mod patches;
 pub mod refresh;
 pub mod sandbox;
+pub mod ssh;
 
 use crate::agent::patches::UpdateStatus;
 use crate::args::Agent;
@@ -27,9 +28,12 @@ pub const PATCH_REFRESH_INTERVAL: Duration = Duration::from_secs(60 * 60); // 1 
 pub const OFFER_DEADLINE: Duration = Duration::from_secs(60 * 7); // 7 minutes
 pub const HUB_PING_INTERVAL: Duration = Duration::from_secs(60 * 15); // 15 minutes
 
+pub const HUB_PING_RETRY_INTERVAL: Duration = Duration::from_secs(45);
+pub const HUB_PING_TIMEOUT: Duration = Duration::from_secs(30);
+
 #[derive(Debug, Clone)]
 struct State {
-    ssh_key: PrivateKey,
+    ssh_key: Arc<PrivateKey>,
     timers: Timers,
     updates: Option<BTreeMap<String, UpdateStatus>>,
 }
@@ -37,7 +41,7 @@ struct State {
 impl State {
     fn new(ssh_key: PrivateKey) -> Self {
         Self {
-            ssh_key,
+            ssh_key: Arc::new(ssh_key),
             timers: Timers::default(),
             updates: None,
         }
@@ -84,7 +88,7 @@ enum TaskEvent {
     SetUpdates(BTreeMap<String, UpdateStatus>),
 }
 
-async fn connect(
+async fn connector_task(
     state: &Arc<ArcSwap<State>>,
     notify: &Notify,
     _tx: &mpsc::Sender<TaskEvent>,
@@ -93,31 +97,53 @@ async fn connect(
     let mut interval = time::interval(HUB_PING_INTERVAL);
 
     loop {
-        let due = tokio::select! {
+        tokio::select! {
             _ = interval.tick() => {
-                debug!("Timer for periodic hub ping ticked");
-                true
+                debug!("Timer for hub ping ticked");
             }
             _ = notify.notified() => {
                 debug!("Received notify from state machine to inspect state and possibly notify hub");
-                false
+                let state = state.load();
+                debug!("state={:?}", state);
+
+                if last_updates != state.updates {
+                    // Our internal state has changed, so notify the hub
+                    info!("State changed, we should notify hub");
+                    last_updates = state.updates.clone();
+                } else {
+                    continue;
+                }
             }
         };
+
+        // TODO: also notify hub if timers are overdue
 
         let state = state.load();
         debug!("state={:?}", state);
 
-        // TODO: also notify hub if timers are overdue
+        let addr = "127.0.0.1:2424".parse().unwrap();
 
-        if due {
-            debug!("Periodic hub ping, we should notify hub");
-            last_updates = state.updates.clone();
-        } else if last_updates != state.updates {
-            // This only executes if we got notified, the timer hasn't ticked,
-            // but our internal state has changed, so notify the hub and reset the timer
-            info!("Updates changed, we should notify hub");
-            last_updates = state.updates.clone();
-            interval.reset();
+        match time::timeout(
+            HUB_PING_TIMEOUT,
+            ssh::submit_to_hub(addr, state.ssh_key.clone()),
+        )
+        .await
+        {
+            Ok(Ok(())) => {
+                info!("Successfully notified hub");
+
+                last_updates = state.updates.clone();
+                // Reset the interval timer, in case this was due to a state change and not a regular tick
+                interval.reset();
+            }
+            Ok(Err(err)) => {
+                error!("Failed to notify hub: {err:?}");
+                interval.reset_after(HUB_PING_RETRY_INTERVAL);
+            }
+            Err(err) => {
+                error!("Timed out while trying to notify hub: {err:?}");
+                interval.reset_after(HUB_PING_RETRY_INTERVAL);
+            }
         }
     }
 }
@@ -153,7 +179,7 @@ async fn state_machine(
     }
 }
 
-async fn ipc_socket(
+async fn ipc_server(
     state: &Arc<ArcSwap<State>>,
     socket: UnixListener,
     tx: &mpsc::Sender<TaskEvent>,
@@ -296,8 +322,8 @@ pub async fn run(_config: Option<&Path>, args: &Agent) -> Result<()> {
     let notify = Notify::new();
 
     tokio::select! {
-        res = connect(&state, &notify, &tx) => res,
+        res = connector_task(&state, &notify, &tx) => res,
         res = state_machine(&state, &notify, rx) => res,
-        res = ipc_socket(&state, socket, &tx) => res,
+        res = ipc_server(&state, socket, &tx) => res,
     }
 }

@@ -6,6 +6,7 @@ pub mod hub;
 pub mod ipc;
 pub mod keygen;
 pub mod node;
+pub mod ssh;
 pub mod wire;
 
 use crate::args::{Args, Plumbing, Subcommand};
