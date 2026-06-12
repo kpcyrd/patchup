@@ -3,6 +3,7 @@ use prometheus::{Encoder, IntGauge, Opts, Registry, TextEncoder};
 use std::convert::Infallible;
 use std::future;
 use std::net::SocketAddr;
+use tokio::net::TcpListener;
 use warp::Filter;
 use warp::http::StatusCode;
 use warp::reject::MethodNotAllowed;
@@ -72,9 +73,13 @@ pub async fn start(addr: Option<SocketAddr>) -> Result<()> {
     };
     info!("Starting metrics server on {addr}");
 
+    let socket = TcpListener::bind(addr)
+        .await
+        .context("Failed to bind metrics server")?;
+
     let filter = warp::path!("metrics").then(metrics);
     let filter = filter.recover(rejection);
-    warp::serve(filter).run(addr).await;
+    warp::serve(filter).incoming(socket).run().await;
 
     Ok(())
 }
