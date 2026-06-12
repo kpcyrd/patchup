@@ -59,6 +59,9 @@ pub struct Hub {
     /// The data directory to use
     #[arg(short = 'D', long, env = "PATCHUP_HUB_DATA")]
     pub data: PathBuf,
+    /// Bind a port for http prometheus metrics
+    #[arg(long)]
+    pub metrics: Option<SocketAddr>,
 }
 
 /// Report patch status to a hub
