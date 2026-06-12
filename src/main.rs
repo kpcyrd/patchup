@@ -6,15 +6,18 @@ pub mod hub;
 pub mod ipc;
 pub mod keygen;
 pub mod node;
+pub mod prompt;
 pub mod ssh;
 pub mod wire;
 
 use crate::args::{Args, Plumbing, Subcommand};
 use crate::config::Config;
 use crate::errors::*;
+use crate::prompt::Prompt;
 use clap::Parser;
 use colored::Colorize;
 use env_logger::Env;
+use std::net::SocketAddr;
 // use etcetera::BaseStrategy;
 use russh::keys::{HashAlg, PrivateKey, PublicKey};
 use tokio::io::AsyncReadExt;
@@ -87,8 +90,28 @@ async fn main() -> Result<()> {
                 agent::run(args.config.as_deref(), agent).await?;
             }
         }
+        Subcommand::Connect(args) => {
+            let mut sock = ipc::agent::AgentIpc::connect(&args.socket.path).await?;
+            let status = sock.status().await?;
+
+            println!("{} {}", "ssh key:   ".bold(), status.ssh_key.to_openssh()?);
+            println!();
+
+            let mut prompt = Prompt::new();
+            let hub_addr = prompt.get::<SocketAddr>("Hub address [ip:port]: ").await?;
+
+            // Connect to the hub and get their ssh public key
+
+            // Check if it's already known, otherwise ask if we want to accept it
+
+            // Check if we can authenticate and the server speaks our protocol
+
+            // If so, persist the configuration in the agent
+
+            dbg!(&hub_addr);
+        }
         Subcommand::Status(args) => {
-            let mut sock = ipc::agent::AgentIpc::connect(&args.socket).await?;
+            let mut sock = ipc::agent::AgentIpc::connect(&args.socket.path).await?;
             let status = sock.status().await?;
             if args.output.json {
                 let json = serde_json::to_string_pretty(&status)?;

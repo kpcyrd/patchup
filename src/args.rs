@@ -25,6 +25,7 @@ pub enum Subcommand {
     Keygen(Keygen),
     Hub(Hub),
     Agent(Agent),
+    Connect(Connect),
     Status(Status),
     #[command(subcommand)]
     Plumbing(Plumbing),
@@ -73,6 +74,14 @@ pub struct Agent {
     pub refresh: Option<PathBuf>,
 }
 
+/// Configure a hub for an agent
+#[derive(Debug, Clone, Parser)]
+pub struct Connect {
+    // TODO: It should be possible to configure non-iteractively
+    #[command(flatten)]
+    pub socket: Socket,
+}
+
 /// Show status of this host's agent
 #[derive(Debug, Clone, Parser)]
 pub struct Status {
@@ -82,9 +91,8 @@ pub struct Status {
     #[arg(short, long)]
     pub refresh: bool,
     */
-    /// The agent socket to connect to
-    #[arg(short = 'S', long, default_value = "/run/patchup.sock")]
-    pub socket: PathBuf,
+    #[command(flatten)]
+    pub socket: Socket,
     #[command(flatten)]
     pub output: Output,
 }
@@ -100,6 +108,13 @@ pub enum Plumbing {
         #[command(flatten)]
         output: Output,
     },
+}
+
+#[derive(Debug, Clone, Parser)]
+pub struct Socket {
+    /// The agent socket to connect to
+    #[arg(short = 'S', long = "socket", default_value = "/run/patchup.sock")]
+    pub path: PathBuf,
 }
 
 #[derive(Debug, Clone, Parser)]

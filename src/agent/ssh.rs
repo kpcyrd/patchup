@@ -2,7 +2,7 @@ use crate::errors::*;
 use crate::ssh;
 use russh::{
     Channel, Preferred,
-    client::Msg,
+    client::{Handle, Msg},
     keys::{HashAlg, PrivateKey, PrivateKeyWithHashAlg, PublicKey},
 };
 use std::borrow::Cow;
@@ -37,7 +37,7 @@ impl SshClientSession {
     }
 }
 
-async fn connect(addr: SocketAddr, user: &str, key: Arc<PrivateKey>) -> Result<SshClientSession> {
+async fn connect_anonymous(addr: SocketAddr, user: &str) -> Result<Handle<SshClient>> {
     let config = russh::client::Config {
         client_id: ssh::ID,
         inactivity_timeout: Some(ssh::KEEPALIVE_INTERVAL * ssh::KEEPALIVE_MAX),
@@ -55,7 +55,14 @@ async fn connect(addr: SocketAddr, user: &str, key: Arc<PrivateKey>) -> Result<S
     let sh = SshClient {};
 
     debug!("Connecting to ssh server at {addr:?} with user {user:?}");
-    let mut session = russh::client::connect(config, addr, sh).await?;
+    let session = russh::client::connect(config, addr, sh).await?;
+
+    Ok(session)
+}
+
+async fn connect(addr: SocketAddr, user: &str, key: Arc<PrivateKey>) -> Result<SshClientSession> {
+    let mut session = connect_anonymous(addr, user).await?;
+
     let key = PrivateKeyWithHashAlg::new(key, Some(HashAlg::Sha256));
     debug!(
         "Authenticating with private key: {}",
