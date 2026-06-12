@@ -1,0 +1,28 @@
+[Unit]
+Description=patchup: patch management hub
+After=network-online.target remote-fs.target
+Wants=network-online.target
+
+[Service]
+ExecStart=/usr/bin/patchup hub -vv
+Environment=PATCHUP_HUB_DATA=.
+DynamicUser=yes
+StateDirectory=patchup-hub
+WorkingDirectory=/var/lib/patchup-hub
+SyslogIdentifier=%N
+
+CapabilityBoundingSet=
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+PrivateDevices=yes
+ProtectControlGroups=yes
+ProtectHome=yes
+ProtectHostname=yes
+ProtectKernelLogs=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictNamespaces=yes
+
+[Install]
+WantedBy=multi-user.target
