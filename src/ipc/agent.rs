@@ -7,6 +7,7 @@ use russh::keys::PublicKey;
 use serde::{Deserialize, Serialize};
 use serde_with::{DurationSeconds, serde_as};
 use std::collections::BTreeMap;
+use std::net::SocketAddr;
 use std::path::Path;
 use std::time::Duration;
 use tokio::io::BufStream;
@@ -16,6 +17,7 @@ use tokio::net::UnixStream;
 pub enum Request {
     Status,
     Refresh { mandatory: bool },
+    TestHub { hub: ipc::agent::Hub },
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -51,6 +53,12 @@ impl Timers {
             self.agent_uptime > agent::OFFER_DEADLINE
         }
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Hub {
+    pub addr: SocketAddr,
+    pub server_key: PublicKey,
 }
 
 pub struct AgentIpc {
@@ -105,5 +113,15 @@ impl AgentIpc {
         }
 
         Ok(())
+    }
+
+    pub async fn test_hub(&mut self, hub: Hub) -> Result<()> {
+        ipc::send(&mut self.stream, &Request::TestHub { hub }).await?;
+        let success = ipc::recv::<_, bool>(&mut self.stream).await?;
+        if success {
+            Ok(())
+        } else {
+            bail!("Hub connection test failed");
+        }
     }
 }

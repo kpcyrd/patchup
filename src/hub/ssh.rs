@@ -142,7 +142,7 @@ impl russh::server::Handler for SshSession {
         let handle = session.handle();
 
         match cmd {
-            "_PATCHUP" => {
+            ssh::AGENT_CMD => {
                 let _ = handle.data(channel_id, "{\"status\":\"ok\"}\n").await;
                 let _ = handle.exit_status_request(channel_id, 0).await;
                 let _ = handle.eof(channel_id).await;

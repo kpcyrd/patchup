@@ -9,8 +9,18 @@ use std::borrow::Cow;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::io::AsyncReadExt;
+use tokio::sync::mpsc;
 
-struct SshClient {}
+pub use crate::ssh::AGENT_USER;
+
+pub enum ServerKeyVerification {
+    Matches(PublicKey),
+    Report(mpsc::Sender<PublicKey>),
+}
+
+pub struct SshClient {
+    server_key_verification: ServerKeyVerification,
+}
 
 impl russh::client::Handler for SshClient {
     type Error = anyhow::Error;
@@ -19,13 +29,32 @@ impl russh::client::Handler for SshClient {
         &mut self,
         server_public_key: &PublicKey,
     ) -> Result<bool, Self::Error> {
-        // TODO: actually verify the key
-        debug!("TODO: Server public key: {}", server_public_key.to_string());
-        Ok(true)
+        match &self.server_key_verification {
+            ServerKeyVerification::Matches(expected) => {
+                if server_public_key == expected {
+                    debug!("Server public key matches expected key");
+                    Ok(true)
+                } else {
+                    warn!(
+                        "Server public key does NOT match expected key, received: {}",
+                        server_public_key.to_string()
+                    );
+                    Ok(false)
+                }
+            }
+            ServerKeyVerification::Report(sender) => {
+                debug!(
+                    "Detected server public key: {}",
+                    server_public_key.to_string()
+                );
+                sender.try_send(server_public_key.clone())?;
+                Ok(true)
+            }
+        }
     }
 }
 
-struct SshClientSession {
+pub struct SshClientSession {
     session: russh::client::Handle<SshClient>,
 }
 
@@ -37,7 +66,11 @@ impl SshClientSession {
     }
 }
 
-async fn connect_anonymous(addr: SocketAddr, user: &str) -> Result<Handle<SshClient>> {
+pub async fn connect_anonymous(
+    addr: SocketAddr,
+    user: &str,
+    server_key_verification: ServerKeyVerification,
+) -> Result<Handle<SshClient>> {
     let config = russh::client::Config {
         client_id: ssh::ID,
         inactivity_timeout: Some(ssh::KEEPALIVE_INTERVAL * ssh::KEEPALIVE_MAX),
@@ -52,7 +85,9 @@ async fn connect_anonymous(addr: SocketAddr, user: &str) -> Result<Handle<SshCli
         ..<_>::default()
     }
     .into();
-    let sh = SshClient {};
+    let sh = SshClient {
+        server_key_verification,
+    };
 
     debug!("Connecting to ssh server at {addr:?} with user {user:?}");
     let session = russh::client::connect(config, addr, sh).await?;
@@ -60,8 +95,14 @@ async fn connect_anonymous(addr: SocketAddr, user: &str) -> Result<Handle<SshCli
     Ok(session)
 }
 
-async fn connect(addr: SocketAddr, user: &str, key: Arc<PrivateKey>) -> Result<SshClientSession> {
-    let mut session = connect_anonymous(addr, user).await?;
+pub async fn connect(
+    addr: SocketAddr,
+    user: &str,
+    key: Arc<PrivateKey>,
+    server_key: PublicKey,
+) -> Result<SshClientSession> {
+    let server_key_verification = ServerKeyVerification::Matches(server_key);
+    let mut session = connect_anonymous(addr, user, server_key_verification).await?;
 
     let key = PrivateKeyWithHashAlg::new(key, Some(HashAlg::Sha256));
     debug!(
@@ -74,9 +115,13 @@ async fn connect(addr: SocketAddr, user: &str, key: Arc<PrivateKey>) -> Result<S
     Ok(SshClientSession { session })
 }
 
-pub async fn submit_to_hub(addr: SocketAddr, key: Arc<PrivateKey>) -> Result<()> {
-    let ssh = connect(addr, "patchup", key).await?;
-    let channel = ssh.exec("_PATCHUP").await?;
+pub async fn submit_to_hub(
+    addr: SocketAddr,
+    key: Arc<PrivateKey>,
+    server_key: PublicKey,
+) -> Result<()> {
+    let ssh = connect(addr, ssh::AGENT_USER, key, server_key).await?;
+    let channel = ssh.exec(ssh::AGENT_CMD).await?;
     let sshd_stream = channel.into_stream();
     let (mut sshd_rx, mut _sshd_tx) = tokio::io::split(sshd_stream);
 

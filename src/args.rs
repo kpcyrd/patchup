@@ -77,9 +77,12 @@ pub struct Agent {
 /// Configure a hub for an agent
 #[derive(Debug, Clone, Parser)]
 pub struct Connect {
-    // TODO: It should be possible to configure non-iteractively
+    /// The hub address to connect to
+    pub addr: Option<SocketAddr>,
     #[command(flatten)]
     pub socket: Socket,
+    //
+    // TODO: It should be possible to configure non-iteractively
 }
 
 /// Show status of this host's agent

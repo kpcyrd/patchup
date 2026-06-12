@@ -10,6 +10,7 @@ pub mod prompt;
 pub mod ssh;
 pub mod wire;
 
+use crate::agent::ssh::ServerKeyVerification;
 use crate::args::{Args, Plumbing, Subcommand};
 use crate::config::Config;
 use crate::errors::*;
@@ -18,6 +19,7 @@ use clap::Parser;
 use colored::Colorize;
 use env_logger::Env;
 use std::net::SocketAddr;
+use tokio::sync::mpsc;
 // use etcetera::BaseStrategy;
 use russh::keys::{HashAlg, PrivateKey, PublicKey};
 use tokio::io::AsyncReadExt;
@@ -94,21 +96,60 @@ async fn main() -> Result<()> {
             let mut sock = ipc::agent::AgentIpc::connect(&args.socket.path).await?;
             let status = sock.status().await?;
 
+            // Show the agent ssh key so it can be added to the hub configuration
             println!("{} {}", "ssh key:   ".bold(), status.ssh_key.to_openssh()?);
             println!();
 
+            // Ask for the hub address if not provided as argument
             let mut prompt = Prompt::new();
-            let hub_addr = prompt.get::<SocketAddr>("Hub address [ip:port]: ").await?;
+            let hub_addr = if let Some(addr) = args.addr {
+                println!("hub address [ip:port]: {}", addr);
+                addr
+            } else {
+                prompt.get::<SocketAddr>("hub address [ip:port]: ").await?
+            };
+            println!();
 
             // Connect to the hub and get their ssh public key
+            let (tx, mut rx) = mpsc::channel(1);
+
+            let ssh = agent::ssh::connect_anonymous(
+                hub_addr,
+                "patchup",
+                ServerKeyVerification::Report(tx),
+            )
+            .await?;
+            drop(ssh);
+            let server_key = rx.try_recv()?;
+
+            println!(
+                "{} {}",
+                "server ssh key:  ".bold(),
+                server_key.to_openssh()?
+            );
+            println!(
+                "{} {}",
+                "sha256:          ".bold(),
+                server_key.fingerprint(HashAlg::Sha256)
+            );
+            println!();
 
             // Check if it's already known, otherwise ask if we want to accept it
+            let yes_no = prompt
+                .get::<prompt::YesNo>("accept key? [yes/no]: ")
+                .await?;
+
+            if !yes_no.is_yes() {
+                println!("setup canceled by user");
+                return Ok(());
+            }
+            println!();
 
             // Check if we can authenticate and the server speaks our protocol
+            sock.test_hub(ipc::agent::Hub { addr: hub_addr, server_key }).await?;
+            println!("successfully connected to hub and authenticated with ssh key");
 
             // If so, persist the configuration in the agent
-
-            dbg!(&hub_addr);
         }
         Subcommand::Status(args) => {
             let mut sock = ipc::agent::AgentIpc::connect(&args.socket.path).await?;

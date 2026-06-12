@@ -26,7 +26,7 @@ impl Prompt {
 
     pub async fn get<T: FromStr>(&mut self, question: &str) -> Result<T>
     where
-        T::Err: std::error::Error + Send + Sync + 'static,
+        T::Err: std::fmt::Display,
     {
         loop {
             self.stdout.write_all(question.as_bytes()).await?;
@@ -54,6 +54,29 @@ impl Prompt {
                         .await?;
                 }
             }
+        }
+    }
+}
+
+pub enum YesNo {
+    Yes,
+    No,
+}
+
+impl YesNo {
+    pub fn is_yes(&self) -> bool {
+        matches!(self, YesNo::Yes)
+    }
+}
+
+impl FromStr for YesNo {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self> {
+        match s.to_lowercase().as_str() {
+            "yes" => Ok(YesNo::Yes),
+            "no" => Ok(YesNo::No),
+            _ => bail!("Please enter 'yes' or 'no'"),
         }
     }
 }

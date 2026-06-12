@@ -35,6 +35,7 @@ pub const HUB_PING_TIMEOUT: Duration = Duration::from_secs(30);
 struct State {
     ssh_key: Arc<PrivateKey>,
     timers: Timers,
+    hub: Option<ipc::agent::Hub>,
     updates: Option<BTreeMap<String, UpdateStatus>>,
 }
 
@@ -43,6 +44,7 @@ impl State {
         Self {
             ssh_key: Arc::new(ssh_key),
             timers: Timers::default(),
+            hub: None,
             updates: None,
         }
     }
@@ -93,6 +95,7 @@ async fn connector_task(
     notify: &Notify,
     _tx: &mpsc::Sender<TaskEvent>,
 ) -> Result<()> {
+    // The previous state should include more info, including sysinfo, and hub configuration
     let mut last_updates = state.load().updates.clone();
     let mut interval = time::interval(HUB_PING_INTERVAL);
 
@@ -121,11 +124,14 @@ async fn connector_task(
         let state = state.load();
         debug!("state={:?}", state);
 
-        let addr = "127.0.0.1:2424".parse().unwrap();
+        let Some(hub) = &state.hub else {
+            debug!("No hub configured, skipping notification");
+            continue;
+        };
 
         match time::timeout(
             HUB_PING_TIMEOUT,
-            ssh::submit_to_hub(addr, state.ssh_key.clone()),
+            ssh::submit_to_hub(hub.addr, state.ssh_key.clone(), hub.server_key.clone()),
         )
         .await
         {
@@ -268,6 +274,34 @@ async fn serve_socket_client(
 
                 // We are done, disconnect the remote process
                 break;
+            }
+            ipc::agent::Request::TestHub { hub } => {
+                let state = state.load();
+
+                match time::timeout(
+                    HUB_PING_TIMEOUT,
+                    ssh::connect(
+                        hub.addr,
+                        ssh::AGENT_USER,
+                        state.ssh_key.clone(),
+                        hub.server_key.clone(),
+                    ),
+                )
+                .await
+                {
+                    Ok(Ok(_)) => {
+                        info!("Successfully connected to hub");
+                        ipc::send(&mut stream, &true).await?;
+                    }
+                    Ok(Err(err)) => {
+                        error!("Failed to connect to hub: {err:?}");
+                        ipc::send(&mut stream, &false).await?;
+                    }
+                    Err(err) => {
+                        error!("Failed to connect to hub: {err:?}");
+                        ipc::send(&mut stream, &false).await?;
+                    }
+                }
             }
         }
     }
