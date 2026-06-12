@@ -7,7 +7,10 @@ pub mod ssh;
 use crate::agent::patches::UpdateStatus;
 use crate::args::Agent;
 use crate::errors::*;
-use crate::ipc::{self, agent::OfferRequest};
+use crate::ipc::{
+    self,
+    agent::{HubConnected, OfferRequest},
+};
 use crate::keygen;
 use crate::node::NodeInfo;
 use arc_swap::ArcSwap;
@@ -88,6 +91,7 @@ impl Timers {
 enum TaskEvent {
     RefreshOffered,
     SetUpdates(BTreeMap<String, UpdateStatus>),
+    SetHub(ipc::agent::Hub),
 }
 
 async fn connector_task(
@@ -177,6 +181,14 @@ async fn state_machine(
                 let mut new = state.load().as_ref().clone();
                 new.updates = Some(updates);
                 new.timers.last_refresh = Some(time::Instant::now());
+                state.store(Arc::new(new));
+
+                notify.notify_one();
+            }
+            TaskEvent::SetHub(hub) => {
+                debug!("Updating hub configuration");
+                let mut new = state.load().as_ref().clone();
+                new.hub = Some(hub);
                 state.store(Arc::new(new));
 
                 notify.notify_one();
@@ -275,10 +287,10 @@ async fn serve_socket_client(
                 // We are done, disconnect the remote process
                 break;
             }
-            ipc::agent::Request::TestHub { hub } => {
+            ipc::agent::Request::ConnectHub { hub } => {
                 let state = state.load();
 
-                match time::timeout(
+                let error = match time::timeout(
                     HUB_PING_TIMEOUT,
                     ssh::connect(
                         hub.addr,
@@ -289,19 +301,20 @@ async fn serve_socket_client(
                 )
                 .await
                 {
-                    Ok(Ok(_)) => {
+                    Ok(Ok(ssh)) => {
                         info!("Successfully connected to hub");
-                        ipc::send(&mut stream, &true).await?;
+                        drop(ssh);
+
+                        // Store the hub configuration in the state and file
+                        tx.send(TaskEvent::SetHub(hub)).await?;
+
+                        None
                     }
-                    Ok(Err(err)) => {
-                        error!("Failed to connect to hub: {err:?}");
-                        ipc::send(&mut stream, &false).await?;
-                    }
-                    Err(err) => {
-                        error!("Failed to connect to hub: {err:?}");
-                        ipc::send(&mut stream, &false).await?;
-                    }
-                }
+                    Ok(Err(err)) => Some(format!("Failed to connect to hub: {err:?}")),
+                    Err(err) => Some(format!("Failed to connect to hub: {err:?}")),
+                };
+
+                ipc::send(&mut stream, &HubConnected { error }).await?;
             }
         }
     }

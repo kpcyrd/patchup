@@ -17,7 +17,7 @@ use tokio::net::UnixStream;
 pub enum Request {
     Status,
     Refresh { mandatory: bool },
-    TestHub { hub: ipc::agent::Hub },
+    ConnectHub { hub: ipc::agent::Hub },
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -59,6 +59,11 @@ impl Timers {
 pub struct Hub {
     pub addr: SocketAddr,
     pub server_key: PublicKey,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HubConnected {
+    pub error: Option<String>,
 }
 
 pub struct AgentIpc {
@@ -115,13 +120,13 @@ impl AgentIpc {
         Ok(())
     }
 
-    pub async fn test_hub(&mut self, hub: Hub) -> Result<()> {
-        ipc::send(&mut self.stream, &Request::TestHub { hub }).await?;
-        let success = ipc::recv::<_, bool>(&mut self.stream).await?;
-        if success {
-            Ok(())
+    pub async fn connect_hub(&mut self, hub: Hub) -> Result<()> {
+        ipc::send(&mut self.stream, &Request::ConnectHub { hub }).await?;
+        let connected = ipc::recv::<_, HubConnected>(&mut self.stream).await?;
+        if let Some(err) = connected.error {
+            bail!("Hub connection failed: {err:?}");
         } else {
-            bail!("Hub connection test failed");
+            Ok(())
         }
     }
 }

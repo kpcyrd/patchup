@@ -146,10 +146,13 @@ async fn main() -> Result<()> {
             println!();
 
             // Check if we can authenticate and the server speaks our protocol
-            sock.test_hub(ipc::agent::Hub { addr: hub_addr, server_key }).await?;
-            println!("successfully connected to hub and authenticated with ssh key");
-
             // If so, persist the configuration in the agent
+            sock.connect_hub(ipc::agent::Hub {
+                addr: hub_addr,
+                server_key,
+            })
+            .await?;
+            println!("successfully connected to hub and authenticated with ssh key");
         }
         Subcommand::Status(args) => {
             let mut sock = ipc::agent::AgentIpc::connect(&args.socket.path).await?;
