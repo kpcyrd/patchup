@@ -1,4 +1,5 @@
 pub mod config;
+pub mod disk;
 pub mod patches;
 pub mod refresh;
 pub mod sandbox;
@@ -16,7 +17,7 @@ use crate::node::NodeInfo;
 use arc_swap::ArcSwap;
 use russh::keys::PrivateKey;
 use std::collections::BTreeMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::{
     fs,
@@ -37,14 +38,16 @@ pub const HUB_PING_TIMEOUT: Duration = Duration::from_secs(30);
 #[derive(Debug, Clone)]
 struct State {
     ssh_key: Arc<PrivateKey>,
+    data_dir: PathBuf,
     data: StateData,
     timers: Timers,
 }
 
 impl State {
-    fn new(ssh_key: PrivateKey) -> Self {
+    fn new(ssh_key: PrivateKey, data_dir: PathBuf) -> Self {
         Self {
             ssh_key: Arc::new(ssh_key),
+            data_dir,
             data: StateData::new(),
             timers: Timers::default(),
         }
@@ -206,8 +209,14 @@ async fn state_machine(
             }
             TaskEvent::SetHub(hub) => {
                 debug!("Updating hub configuration");
+
                 let mut new = state.load().as_ref().clone();
                 new.data.hub = Some(hub);
+
+                // Write a copy to disk
+                disk::save(&new).await?;
+
+                // Only then register it into the shared state
                 state.store(Arc::new(new));
 
                 notify.notify_one();
@@ -382,7 +391,10 @@ pub async fn run(_config: Option<&Path>, args: &Agent) -> Result<()> {
     let ssh_key_path = data_dir.join("ssh.key");
     let ssh_key = keygen::init_from_path(&ssh_key_path).await?;
 
-    let state = Arc::new(ArcSwap::from_pointee(State::new(ssh_key)));
+    let mut state = State::new(ssh_key, data_dir.clone());
+    disk::load(&mut state).await?;
+
+    let state = Arc::new(ArcSwap::from_pointee(state));
     let (tx, rx) = mpsc::channel(5);
     let notify = Notify::new();
 
