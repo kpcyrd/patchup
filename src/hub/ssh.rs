@@ -158,12 +158,17 @@ impl russh::server::Handler for SshSession {
             return Ok(());
         };
 
+        let Ok(cmd) = shell_words::split(cmd) else {
+            session.channel_failure(channel_id)?;
+            return Ok(());
+        };
+
         debug!("Request exec for channel {channel_id:?}: {cmd:?}");
         session.channel_success(channel_id)?;
         let handle = session.handle();
 
-        match cmd {
-            ssh::AGENT_CMD => {
+        match cmd.get(0).map(String::as_str) {
+            Some(ssh::AGENT_CMD) => {
                 let shared = self.shared.clone();
                 let public_key = public_key.clone();
 
@@ -174,19 +179,66 @@ impl russh::server::Handler for SshSession {
                     }
                 });
             }
-            "ls" => {
+            Some("ls") => {
                 let state = self.shared.state.load();
 
-                let mut buf = serde_json::to_string_pretty(&state.nodes)?;
-                buf.push('\n');
+                if cmd.iter().any(|arg| arg == "--json") {
+                    let mut buf = serde_json::to_string_pretty(&state.nodes)?;
+                    buf.push('\n');
+                    let _ = handle.data(channel_id, buf).await;
+                } else {
+                    for (public_key, agent) in &state.nodes {
+                        let node = &agent.nodeinfo;
+                        let elapsed = humantime::format_duration(
+                            agent.last_ping.elapsed().into(),
+                        );
+                        let mut buf = format!("{}\n", public_key.to_string());
+                        buf.push_str(&format!("  hostname:  {}\n", node.hostname));
+                        buf.push_str(&format!("  os:        {}\n", node.os));
+                        buf.push_str(&format!("  arch:      {}\n", node.arch));
+                        buf.push_str(&format!("  kernel:    {}\n", node.kernel));
+                        buf.push_str(&format!("  last seen: {elapsed} ago\n"));
+                        if let Some(updates) = &node.updates {
+                            if updates.is_empty() {
+                                buf.push_str("  updates:   no package manager detected\n");
+                            } else {
+                                buf.push_str("  updates:\n");
+                                for (manager, status) in updates {
+                                    let n = status.pending.len();
+                                    let nomen = if n == 1 { "update" } else { "updates" };
+                                    let hint = if status.refresh_error {
+                                        " (failed to refresh)"
+                                    } else {
+                                        ""
+                                    };
+                                    buf.push_str(&format!(
+                                        "    {:<10} {n} pending {nomen}{hint}\n",
+                                        format!("{manager}:"),
+                                    ));
+                                    for update in &status.pending {
+                                        buf.push_str(&format!(
+                                            "               - {}\n",
+                                            update.name
+                                        ));
+                                    }
+                                }
+                            }
+                        } else {
+                            buf.push_str(
+                                "  updates:   waiting for privileged process\n",
+                            );
+                        }
+                        buf.push('\n');
+                        let _ = handle.data(channel_id, buf).await;
+                    }
+                }
 
-                let _ = handle.data(channel_id, buf).await;
                 let _ = handle.exit_status_request(channel_id, 0).await;
                 let _ = handle.eof(channel_id).await;
                 let _ = handle.close(channel_id).await;
             }
             _ => {
-                let error_msg = format!("Refused to execute command: {cmd}\n");
+                let error_msg = format!("Refused to execute command: {cmd:?}\n");
                 let _ = handle.extended_data(channel_id, 1, error_msg).await;
                 let _ = handle.exit_status_request(channel_id, 1).await;
                 let _ = handle.eof(channel_id).await;
