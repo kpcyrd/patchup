@@ -5,24 +5,44 @@ mod ssh;
 use crate::args::Hub;
 use crate::errors::*;
 use crate::keygen;
+use crate::node::NodeInfo;
 use arc_swap::ArcSwap;
 use russh::keys::PublicKey;
+use serde::Serialize;
 use std::collections::BTreeMap;
+use std::collections::btree_map::Entry;
 use std::path::Path;
 use std::sync::Arc;
 use tokio::sync::mpsc;
+use tokio::time::Instant;
 
 const CHANNEL_BACKLOG: usize = 64;
 
 #[derive(Debug, Clone)]
 struct State {
-    nodes: BTreeMap<PublicKey, ()>,
+    nodes: BTreeMap<PublicKey, Agent>,
 }
 
 impl State {
     pub fn new() -> Self {
         Self {
             nodes: Default::default(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct Agent {
+    nodeinfo: NodeInfo,
+    #[serde(skip)]
+    last_ping: Instant,
+}
+
+impl Agent {
+    pub fn new(nodeinfo: NodeInfo) -> Self {
+        Self {
+            nodeinfo,
+            last_ping: Instant::now(),
         }
     }
 }
@@ -39,9 +59,12 @@ impl Shared {
         (Self { state, tx }, rx)
     }
 
-    pub async fn ping_from_node(&self, public_key: PublicKey) -> Result<()> {
+    pub async fn ping_from_node(&self, public_key: PublicKey, nodeinfo: NodeInfo) -> Result<()> {
         self.tx
-            .send(TaskEvent::PingNode(public_key))
+            .send(TaskEvent::PingNode {
+                public_key,
+                nodeinfo,
+            })
             .await
             .context("Failed to record ping from node")
     }
@@ -49,7 +72,10 @@ impl Shared {
 
 #[derive(Debug)]
 enum TaskEvent {
-    PingNode(PublicKey),
+    PingNode {
+        public_key: PublicKey,
+        nodeinfo: NodeInfo,
+    },
 }
 
 async fn state_machine(
@@ -62,10 +88,22 @@ async fn state_machine(
         };
         info!("State machine woke up: {msg:?}");
         match msg {
-            TaskEvent::PingNode(public_key) => {
+            TaskEvent::PingNode {
+                public_key,
+                nodeinfo,
+            } => {
                 debug!("Ping from node: {public_key:?}");
                 let mut new = state.load().as_ref().clone();
-                new.nodes.insert(public_key, ());
+                match new.nodes.entry(public_key) {
+                    Entry::Occupied(mut entry) => {
+                        let entry = entry.get_mut();
+                        entry.nodeinfo = nodeinfo;
+                        entry.last_ping = Instant::now();
+                    }
+                    Entry::Vacant(entry) => {
+                        entry.insert(Agent::new(nodeinfo));
+                    }
+                }
                 state.store(Arc::new(new));
             }
         }

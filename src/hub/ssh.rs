@@ -1,5 +1,6 @@
 use crate::errors::*;
 use crate::hub;
+use crate::node::NodeInfo;
 use crate::ssh;
 use russh::{
     Channel, ChannelId, MethodKind, MethodSet,
@@ -205,13 +206,13 @@ async fn agent_stream<S: AsyncRead + AsyncWrite + Unpin>(
     let (reader, mut _writer) = tokio::io::split(stream);
     let mut reader = BufReader::new(reader);
 
-    shared.ping_from_node(public_key.clone()).await?;
-
     let mut buf = String::new();
     reader.read_line(&mut buf).await?;
 
-    let x = serde_json::from_str::<serde_json::Value>(&buf)?;
-    println!("Received from agent: {x:#}");
+    let nodeinfo = serde_json::from_str::<NodeInfo>(&buf)?;
+    debug!("Received nodeinfo from agent: {nodeinfo:?}");
+
+    shared.ping_from_node(public_key.clone(), nodeinfo).await?;
 
     // writer.write_all(b"{\"status\":\"ok\"}\n").await?;
     Ok(())

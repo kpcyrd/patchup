@@ -165,12 +165,14 @@ async fn main() -> Result<()> {
                 println!("{}  {}", "os:       ".bold(), status.node.os);
                 println!("{}  {}", "arch:     ".bold(), status.node.arch);
                 println!("{}  {}", "kernel:   ".bold(), status.node.kernel);
+                /*
                 println!(
                     "{}  {}",
                     "uptime:   ".bold(),
                     humantime::format_duration(status.node.uptime)
                 );
                 println!();
+                */
 
                 println!("{} {}", "ssh key:   ".bold(), status.ssh_key.to_openssh()?);
                 println!(
@@ -181,7 +183,7 @@ async fn main() -> Result<()> {
 
                 println!();
                 println!("{}", "updates:".bold());
-                if let Some(updates) = status.updates {
+                if let Some(updates) = status.node.updates {
                     if !updates.is_empty() {
                         for (manager, status) in updates {
                             let manager = format!("{manager}: ");

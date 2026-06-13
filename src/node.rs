@@ -1,18 +1,22 @@
+use crate::agent::patches::UpdateStatus;
 use serde::{Deserialize, Serialize};
-use serde_with::{DurationSeconds, serde_as};
-use std::time::Duration;
+// use serde_with::{DurationSeconds, serde_as};
+use std::collections::BTreeMap;
 use sysinfo::System;
 
-#[serde_as]
-#[derive(Debug, Serialize, Deserialize)]
+// #[serde_as]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct NodeInfo {
     pub hostname: String,
     pub os: String,
     pub os_id: String,
     pub arch: String,
     pub kernel: String,
+    pub updates: Option<BTreeMap<String, UpdateStatus>>,
+    /*
     #[serde_as(as = "DurationSeconds<u64>")]
     pub uptime: Duration,
+    */
 }
 
 impl NodeInfo {
@@ -31,7 +35,8 @@ impl NodeInfo {
             os_id: System::distribution_id(),
             arch: System::cpu_arch(),
             kernel: System::kernel_long_version(),
-            uptime: Duration::from_secs(System::uptime()),
+            updates: None,
+            // uptime: Duration::from_secs(System::uptime()),
         }
     }
 }

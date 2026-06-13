@@ -1,12 +1,11 @@
 use crate::agent;
-use crate::agent::patches::{self, UpdateStatus};
+use crate::agent::patches;
 use crate::errors::*;
 use crate::ipc;
 use crate::node::NodeInfo;
 use russh::keys::PublicKey;
 use serde::{Deserialize, Serialize};
 use serde_with::{DurationSeconds, serde_as};
-use std::collections::BTreeMap;
 use std::net::SocketAddr;
 use std::path::Path;
 use std::time::Duration;
@@ -31,7 +30,6 @@ pub struct Status {
     pub ssh_key: PublicKey,
     pub node: NodeInfo,
     pub timers: Timers,
-    pub updates: Option<BTreeMap<String, UpdateStatus>>,
 }
 
 #[serde_as]
