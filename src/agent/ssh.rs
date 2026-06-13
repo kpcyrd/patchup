@@ -5,10 +5,11 @@ use russh::{
     client::{Handle, Msg},
     keys::{HashAlg, PrivateKey, PrivateKeyWithHashAlg, PublicKey},
 };
+use serde::Serialize;
 use std::borrow::Cow;
 use std::net::SocketAddr;
 use std::sync::Arc;
-use tokio::io::AsyncReadExt;
+use tokio::io::AsyncWriteExt;
 use tokio::sync::mpsc;
 
 pub use crate::ssh::AGENT_USER;
@@ -115,19 +116,26 @@ pub async fn connect(
     Ok(SshClientSession { session })
 }
 
-pub async fn submit_to_hub(
+pub async fn submit_to_hub<T: Serialize>(
     addr: SocketAddr,
     key: Arc<PrivateKey>,
     server_key: PublicKey,
+    data: &T,
 ) -> Result<()> {
     let ssh = connect(addr, ssh::AGENT_USER, key, server_key).await?;
     let channel = ssh.exec(ssh::AGENT_CMD).await?;
     let sshd_stream = channel.into_stream();
-    let (mut sshd_rx, mut _sshd_tx) = tokio::io::split(sshd_stream);
+    let (mut _sshd_rx, mut sshd_tx) = tokio::io::split(sshd_stream);
 
+    let mut buf = serde_json::to_string(data)?;
+    buf.push('\n');
+    sshd_tx.write_all(buf.as_bytes()).await?;
+
+    /*
     let mut buf = String::new();
     sshd_rx.read_to_string(&mut buf).await?;
     info!("Received from hub: {buf:?}");
+    */
 
     Ok(())
 }

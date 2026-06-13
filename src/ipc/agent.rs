@@ -55,7 +55,7 @@ impl Timers {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Hub {
     pub addr: SocketAddr,
     pub server_key: PublicKey,

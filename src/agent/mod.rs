@@ -100,7 +100,7 @@ async fn connector_task(
     _tx: &mpsc::Sender<TaskEvent>,
 ) -> Result<()> {
     // The previous state should include more info, including sysinfo, and hub configuration
-    let mut last_updates = state.load().updates.clone();
+    let mut last_state = (state.load().hub.clone(), state.load().updates.clone());
     let mut interval = time::interval(HUB_PING_INTERVAL);
 
     loop {
@@ -113,10 +113,11 @@ async fn connector_task(
                 let state = state.load();
                 debug!("state={:?}", state);
 
-                if last_updates != state.updates {
+                // TODO: this check works but is very inefficient
+                if last_state != (state.hub.clone(), state.updates.clone()) {
                     // Our internal state has changed, so notify the hub
                     info!("State changed, we should notify hub");
-                    last_updates = state.updates.clone();
+                    last_state = (state.hub.clone(), state.updates.clone());
                 } else {
                     continue;
                 }
@@ -136,14 +137,19 @@ async fn connector_task(
 
         match time::timeout(
             HUB_PING_TIMEOUT,
-            ssh::submit_to_hub(hub.addr, state.ssh_key.clone(), hub.server_key.clone()),
+            ssh::submit_to_hub(
+                hub.addr,
+                state.ssh_key.clone(),
+                hub.server_key.clone(),
+                &state.updates,
+            ),
         )
         .await
         {
             Ok(Ok(())) => {
                 info!("Successfully notified hub");
 
-                last_updates = state.updates.clone();
+                last_state = (state.hub.clone(), state.updates.clone());
                 // Reset the interval timer, in case this was due to a state change and not a regular tick
                 interval.reset();
             }

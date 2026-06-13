@@ -10,6 +10,7 @@ use std::collections::BTreeMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
+use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWrite, BufReader};
 
 pub struct SshServer {
     shared: Arc<hub::Shared>,
@@ -141,7 +142,7 @@ impl russh::server::Handler for SshSession {
         data: &[u8],
         session: &mut Session,
     ) -> Result<(), Self::Error> {
-        let Some(_channel) = self.take_pending_channel(channel_id) else {
+        let Some(channel) = self.take_pending_channel(channel_id) else {
             session.channel_failure(channel_id)?;
             return Ok(());
         };
@@ -162,12 +163,15 @@ impl russh::server::Handler for SshSession {
 
         match cmd {
             ssh::AGENT_CMD => {
-                self.shared.ping_from_node(public_key.clone()).await?;
+                let shared = self.shared.clone();
+                let public_key = public_key.clone();
 
-                let _ = handle.data(channel_id, "{\"status\":\"ok\"}\n").await;
-                let _ = handle.exit_status_request(channel_id, 0).await;
-                let _ = handle.eof(channel_id).await;
-                let _ = handle.close(channel_id).await;
+                tokio::spawn(async move {
+                    let stream = channel.into_stream();
+                    if let Err(err) = agent_stream(shared, public_key, stream).await {
+                        error!("Error in hub agent session: {err:#}");
+                    }
+                });
             }
             "ls" => {
                 let state = self.shared.state.load();
@@ -191,4 +195,24 @@ impl russh::server::Handler for SshSession {
 
         Ok(())
     }
+}
+
+async fn agent_stream<S: AsyncRead + AsyncWrite + Unpin>(
+    shared: Arc<hub::Shared>,
+    public_key: PublicKey,
+    stream: S,
+) -> Result<()> {
+    let (reader, mut _writer) = tokio::io::split(stream);
+    let mut reader = BufReader::new(reader);
+
+    shared.ping_from_node(public_key.clone()).await?;
+
+    let mut buf = String::new();
+    reader.read_line(&mut buf).await?;
+
+    let x = serde_json::from_str::<serde_json::Value>(&buf)?;
+    println!("Received from agent: {x:#}");
+
+    // writer.write_all(b"{\"status\":\"ok\"}\n").await?;
+    Ok(())
 }
