@@ -123,7 +123,8 @@ async fn connector_task(
             }
         };
 
-        // TODO: also notify hub if timers are overdue
+        // TODO: also notify hub when timers are overdue
+        // TODO: also notify hub when hub config has changed
 
         let state = state.load();
         debug!("state={:?}", state);

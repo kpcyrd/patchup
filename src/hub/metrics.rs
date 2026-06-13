@@ -1,8 +1,10 @@
 use crate::errors::*;
+use crate::hub;
 use prometheus::{Encoder, IntGauge, Opts, Registry, TextEncoder};
 use std::convert::Infallible;
 use std::future;
 use std::net::SocketAddr;
+use std::sync::Arc;
 use tokio::net::TcpListener;
 use warp::Filter;
 use warp::http::StatusCode;
@@ -35,11 +37,12 @@ impl Metrics {
     }
 }
 
-async fn metrics() -> Box<dyn warp::Reply> {
+async fn metrics(shared: Arc<hub::Shared>) -> Box<dyn warp::Reply> {
     let metrics = Metrics::default();
 
     let opts = Opts::new("hello_world", "Hello world").const_label("hello", "world");
-    let count = 1337;
+    let state = shared.state.load();
+    let count = state.nodes.len() as i64;
 
     metrics.gauge(opts, count);
 
@@ -59,7 +62,7 @@ async fn rejection(err: warp::Rejection) -> Result<impl warp::Reply, Infallible>
         code = StatusCode::BAD_REQUEST;
         message = "400 - bad request\n";
     } else {
-        error!("unhandled rejection: {:?}", err);
+        error!("Unhandled rejection: {:?}", err);
         code = StatusCode::INTERNAL_SERVER_ERROR;
         message = "server error\n";
     }
@@ -67,7 +70,7 @@ async fn rejection(err: warp::Rejection) -> Result<impl warp::Reply, Infallible>
     Ok(warp::reply::with_status(message, code))
 }
 
-pub async fn start(addr: Option<SocketAddr>) -> Result<()> {
+pub async fn start(addr: Option<SocketAddr>, shared: Arc<hub::Shared>) -> Result<()> {
     let Some(addr) = addr else {
         return future::pending().await;
     };
@@ -77,7 +80,9 @@ pub async fn start(addr: Option<SocketAddr>) -> Result<()> {
         .await
         .context("Failed to bind metrics server")?;
 
-    let filter = warp::path!("metrics").then(metrics);
+    let filter = warp::path!("metrics")
+        .and(warp::any().map(move || shared.clone()))
+        .then(metrics);
     let filter = filter.recover(rejection);
     warp::serve(filter).incoming(socket).run().await;
 

@@ -1,4 +1,5 @@
 use crate::errors::*;
+use crate::hub;
 use crate::ssh;
 use russh::{
     Channel, ChannelId, MethodKind, MethodSet,
@@ -11,18 +12,12 @@ use std::sync::Arc;
 use std::time::Duration;
 
 pub struct SshServer {
-    // shared: Arc<hub::Shared>,
+    shared: Arc<hub::Shared>,
 }
 
 impl SshServer {
-    /*
     pub fn new(shared: Arc<hub::Shared>) -> Self {
         Self { shared }
-    }
-    */
-
-    pub fn new() -> Self {
-        Self {}
     }
 
     pub async fn run(&mut self, key: PrivateKey, bind: SocketAddr) -> Result<()> {
@@ -48,18 +43,21 @@ impl Server for SshServer {
     type Handler = SshSession;
 
     fn new_client(&mut self, _: Option<SocketAddr>) -> Self::Handler {
-        // SshSession::new(self.shared.clone())
-        SshSession::new()
+        SshSession::new(self.shared.clone())
     }
 }
 
 pub struct SshSession {
+    shared: Arc<hub::Shared>,
+    public_key: Option<PublicKey>,
     pending_channels: BTreeMap<ChannelId, Channel<Msg>>,
 }
 
 impl SshSession {
-    pub fn new() -> Self {
+    pub fn new(shared: Arc<hub::Shared>) -> Self {
         Self {
+            shared,
+            public_key: None,
             pending_channels: Default::default(),
         }
     }
@@ -75,9 +73,10 @@ impl russh::server::Handler for SshSession {
     async fn auth_publickey(
         &mut self,
         _user: &str,
-        _public_key: &PublicKey,
+        public_key: &PublicKey,
     ) -> Result<Auth, Self::Error> {
         info!("TODO: authenticate public key"); // TODO
+        self.public_key = Some(public_key.clone());
         Ok(Auth::Accept)
     }
 
@@ -110,16 +109,31 @@ impl russh::server::Handler for SshSession {
         Ok(())
     }
 
-    /*
+    async fn pty_request(
+        &mut self,
+        channel_id: ChannelId,
+        _term: &str,
+        _col_width: u32,
+        _row_height: u32,
+        _pix_width: u32,
+        _pix_height: u32,
+        _modes: &[(russh::Pty, u32)],
+        session: &mut Session,
+    ) -> Result<(), Self::Error> {
+        info!("Requested PTY for channel {channel_id:?}");
+        session.channel_failure(channel_id)?;
+        Ok(())
+    }
+
     async fn shell_request(
         &mut self,
         channel_id: ChannelId,
         session: &mut Session,
     ) -> Result<(), Self::Error> {
         info!("Requested shell session for channel {channel_id:?}");
+        session.channel_failure(channel_id)?;
         Ok(())
     }
-    */
 
     async fn exec_request(
         &mut self,
@@ -128,6 +142,11 @@ impl russh::server::Handler for SshSession {
         session: &mut Session,
     ) -> Result<(), Self::Error> {
         let Some(_channel) = self.take_pending_channel(channel_id) else {
+            session.channel_failure(channel_id)?;
+            return Ok(());
+        };
+
+        let Some(public_key) = &self.public_key else {
             session.channel_failure(channel_id)?;
             return Ok(());
         };
@@ -143,13 +162,20 @@ impl russh::server::Handler for SshSession {
 
         match cmd {
             ssh::AGENT_CMD => {
+                self.shared.ping_from_node(public_key.clone()).await?;
+
                 let _ = handle.data(channel_id, "{\"status\":\"ok\"}\n").await;
                 let _ = handle.exit_status_request(channel_id, 0).await;
                 let _ = handle.eof(channel_id).await;
                 let _ = handle.close(channel_id).await;
             }
             "ls" => {
-                let _ = handle.data(channel_id, "Hello world!\n").await;
+                let state = self.shared.state.load();
+
+                let mut buf = serde_json::to_string_pretty(&state.nodes)?;
+                buf.push('\n');
+
+                let _ = handle.data(channel_id, buf).await;
                 let _ = handle.exit_status_request(channel_id, 0).await;
                 let _ = handle.eof(channel_id).await;
                 let _ = handle.close(channel_id).await;
