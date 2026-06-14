@@ -349,7 +349,7 @@ async fn serve_socket_client(
     Ok(())
 }
 
-async fn bind() -> Result<UnixListener> {
+async fn bind(socket_path: &Path) -> Result<UnixListener> {
     let socket = if let Ok(fds) = sd_listen_fds::get()
         && let num_fds = fds.len()
         && let Some((name, fd)) = fds.into_iter().next()
@@ -365,8 +365,6 @@ async fn bind() -> Result<UnixListener> {
             .context("Failed to set socket non-blocking")?;
         UnixListener::from_std(fd).context("Failed to use sd-listen socket from systemd")?
     } else {
-        // TODO: use proper path
-        let socket_path = "data/agent/patchup-agent.sock";
         fs::remove_file(socket_path).await.ok();
         debug!("Binding to socket: {socket_path:?}");
         UnixListener::bind(socket_path)
@@ -385,7 +383,7 @@ pub async fn run(_config: Option<&Path>, args: &Agent) -> Result<()> {
         .await
         .with_context(|| format!("Failed to create directory: {data_dir:?}"))?;
 
-    let socket = bind().await?;
+    let socket = bind(&args.socket.path).await?;
     sandbox::init();
 
     let ssh_key_path = data_dir.join("ssh.key");

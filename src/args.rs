@@ -75,6 +75,8 @@ pub struct Agent {
     /// Connect as privileged process to socket to refresh patch status
     #[arg(short = 'R', long)]
     pub refresh: Option<PathBuf>,
+    #[command(flatten)]
+    pub socket: Socket,
 }
 
 /// Configure a hub for an agent
@@ -118,7 +120,7 @@ pub enum Plumbing {
 
 #[derive(Debug, Clone, Parser)]
 pub struct Socket {
-    /// The agent socket to connect to
+    /// The agent socket path to use
     #[arg(short = 'S', long = "socket", default_value = "/run/patchup.sock")]
     pub path: PathBuf,
 }
