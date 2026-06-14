@@ -28,7 +28,7 @@ use tokio::{
     time::{self, Duration},
 };
 
-pub const PATCH_REFRESH_INTERVAL: Duration = Duration::from_secs(60 * 60); // 1 hour
+pub const PATCH_REFRESH_INTERVAL: Duration = Duration::from_secs(60 * 60 * 6); // 6 hours
 pub const OFFER_DEADLINE: Duration = Duration::from_secs(60 * 7); // 7 minutes
 pub const HUB_PING_INTERVAL: Duration = Duration::from_secs(60 * 15); // 15 minutes
 
