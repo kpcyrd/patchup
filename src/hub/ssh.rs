@@ -74,6 +74,19 @@ impl SshSession {
 impl russh::server::Handler for SshSession {
     type Error = anyhow::Error;
 
+    async fn auth_publickey_offered(
+        &mut self,
+        _user: &str,
+        public_key: &PublicKey,
+    ) -> Result<Auth, Self::Error> {
+        let config = &self.shared.state.load().config;
+        if config.is_admin(public_key) || config.is_agent(public_key) {
+            Ok(Auth::Accept)
+        } else {
+            Ok(Auth::reject())
+        }
+    }
+
     async fn auth_publickey(
         &mut self,
         _user: &str,
@@ -81,16 +94,7 @@ impl russh::server::Handler for SshSession {
     ) -> Result<Auth, Self::Error> {
         let config = &self.shared.state.load().config;
 
-        let is_admin = config
-            .admins
-            .iter()
-            .any(|admin| admin.keys.contains(public_key));
-        let is_agent = config
-            .nodes
-            .iter()
-            .any(|node| node.keys.contains(public_key));
-
-        if is_admin {
+        if config.is_admin(public_key) {
             info!(
                 "SSH client authenticated as admin with public key: {}",
                 public_key.to_string()
@@ -98,7 +102,7 @@ impl russh::server::Handler for SshSession {
             self.public_key = Some(public_key.clone());
             self.admin = true;
             Ok(Auth::Accept)
-        } else if is_agent {
+        } else if config.is_agent(public_key) {
             info!(
                 "SSH client authenticated as agent with public key: {}",
                 public_key.to_string()

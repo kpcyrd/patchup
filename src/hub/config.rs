@@ -39,6 +39,16 @@ impl Config {
 
         Ok(config)
     }
+
+    pub fn is_admin(&self, public_key: &PublicKey) -> bool {
+        self.admins
+            .iter()
+            .any(|admin| admin.keys.contains(public_key))
+    }
+
+    pub fn is_agent(&self, public_key: &PublicKey) -> bool {
+        self.nodes.iter().any(|node| node.keys.contains(public_key))
+    }
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Deserialize)]
