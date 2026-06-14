@@ -1,0 +1,23 @@
+#!/sbin/openrc-run
+
+name=patchup-hub
+description="patchup hub daemon"
+command=/usr/bin/patchup
+command_args="hub $patchup_hub_args"
+start_stop_daemon_args="--chdir /var/lib/patchup-hub"
+command_user="$patchup_hub_user:$patchup_hub_group"
+command_background=true
+pidfile="/run/$RC_SVCNAME.pid"
+
+error_logger="logger -t '${RC_SVCNAME}' -p daemon.info"
+
+depend() {
+	use dns logger
+	need localmount net
+	after firewall
+}
+
+start_pre() {
+	checkpath --directory --owner "$patchup_hub_user:$patchup_hub_group" --mode 0750 \
+		/var/lib/patchup-hub
+}

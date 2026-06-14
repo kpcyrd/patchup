@@ -1,0 +1,3 @@
+patchup_hub_args="-D /var/lib/patchup-hub"
+patchup_hub_user="patchup"
+patchup_hub_group="patchup"
