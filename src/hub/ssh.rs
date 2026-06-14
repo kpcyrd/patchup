@@ -52,6 +52,7 @@ impl Server for SshServer {
 pub struct SshSession {
     shared: Arc<hub::Shared>,
     public_key: Option<PublicKey>,
+    admin: bool,
     pending_channels: BTreeMap<ChannelId, Channel<Msg>>,
 }
 
@@ -60,6 +61,7 @@ impl SshSession {
         Self {
             shared,
             public_key: None,
+            admin: false,
             pending_channels: Default::default(),
         }
     }
@@ -77,9 +79,39 @@ impl russh::server::Handler for SshSession {
         _user: &str,
         public_key: &PublicKey,
     ) -> Result<Auth, Self::Error> {
-        info!("TODO: authenticate public key"); // TODO
-        self.public_key = Some(public_key.clone());
-        Ok(Auth::Accept)
+        let config = &self.shared.state.load().config;
+
+        let is_admin = config
+            .admins
+            .iter()
+            .any(|admin| admin.keys.contains(public_key));
+        let is_agent = config
+            .nodes
+            .iter()
+            .any(|node| node.keys.contains(public_key));
+
+        if is_admin {
+            info!(
+                "SSH client authenticated as admin with public key: {}",
+                public_key.to_string()
+            );
+            self.public_key = Some(public_key.clone());
+            self.admin = true;
+            Ok(Auth::Accept)
+        } else if is_agent {
+            info!(
+                "SSH client authenticated as agent with public key: {}",
+                public_key.to_string()
+            );
+            self.public_key = Some(public_key.clone());
+            Ok(Auth::Accept)
+        } else {
+            debug!(
+                "Rejected SSH client with unknown public key: {}",
+                public_key.to_string()
+            );
+            Ok(Auth::reject())
+        }
     }
 
     async fn channel_open_session(
@@ -167,7 +199,7 @@ impl russh::server::Handler for SshSession {
         session.channel_success(channel_id)?;
         let handle = session.handle();
 
-        match cmd.get(0).map(String::as_str) {
+        match cmd.first().map(String::as_str) {
             Some(ssh::AGENT_CMD) => {
                 let shared = self.shared.clone();
                 let public_key = public_key.clone();
@@ -179,7 +211,7 @@ impl russh::server::Handler for SshSession {
                     }
                 });
             }
-            Some("ls") => {
+            Some("ls") if self.admin => {
                 let state = self.shared.state.load();
 
                 if cmd.iter().any(|arg| arg == "--json") {
@@ -189,9 +221,7 @@ impl russh::server::Handler for SshSession {
                 } else {
                     for (public_key, agent) in &state.nodes {
                         let node = &agent.nodeinfo;
-                        let elapsed = humantime::format_duration(
-                            agent.last_ping.elapsed().into(),
-                        );
+                        let elapsed = humantime::format_duration(agent.last_ping.elapsed());
                         let mut buf = format!("{}\n", public_key.to_string());
                         buf.push_str(&format!("  hostname:  {}\n", node.hostname));
                         buf.push_str(&format!("  os:        {}\n", node.os));
@@ -224,9 +254,7 @@ impl russh::server::Handler for SshSession {
                                 }
                             }
                         } else {
-                            buf.push_str(
-                                "  updates:   waiting for privileged process\n",
-                            );
+                            buf.push_str("  updates:   waiting for privileged process\n");
                         }
                         buf.push('\n');
                         let _ = handle.data(channel_id, buf).await;

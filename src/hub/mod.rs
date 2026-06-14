@@ -9,23 +9,27 @@ use crate::node::NodeInfo;
 use arc_swap::ArcSwap;
 use russh::keys::PublicKey;
 use serde::Serialize;
-use std::collections::BTreeMap;
-use std::collections::btree_map::Entry;
+use std::collections::{BTreeMap, btree_map::Entry};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::path::Path;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use tokio::time::Instant;
 
 const CHANNEL_BACKLOG: usize = 64;
+const DEFAULT_BIND_ADDR: SocketAddr =
+    SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 2424);
 
 #[derive(Debug, Clone)]
 struct State {
+    config: config::Config,
     nodes: BTreeMap<PublicKey, Agent>,
 }
 
 impl State {
-    pub fn new() -> Self {
+    pub fn new(config: config::Config) -> Self {
         Self {
+            config,
             nodes: Default::default(),
         }
     }
@@ -110,18 +114,28 @@ async fn state_machine(
     }
 }
 
-pub async fn run(_config: Option<&Path>, args: &Hub) -> Result<()> {
+pub async fn run(config: Option<&Path>, args: &Hub) -> Result<()> {
+    let config = config::Config::load(config).await?;
+
+    let ssh_bind_addr = args
+        .bind
+        .or(config.system.bind)
+        .unwrap_or(DEFAULT_BIND_ADDR);
+
+    let metrics_bind_addr = args.metrics.or(config.system.metrics);
+
     let ssh_key_path = args.data.join("ssh.key");
     let ssh_key = keygen::init_from_path(&ssh_key_path).await?;
 
-    let state = Arc::new(ArcSwap::from_pointee(State::new()));
+    let state = State::new(config);
+    let state = Arc::new(ArcSwap::from_pointee(state));
     let (shared, rx) = Shared::new(state.clone());
     let shared = Arc::new(shared);
     let mut server = ssh::SshServer::new(shared.clone());
 
     tokio::select! {
-        res = metrics::start(args.metrics, shared) => res,
+        res = metrics::start(metrics_bind_addr, shared) => res,
         res = state_machine(state, rx) => res,
-        res = server.run(ssh_key.clone(), args.bind) => res,
+        res = server.run(ssh_key.clone(), ssh_bind_addr) => res,
     }
 }

@@ -54,8 +54,8 @@ pub struct Keygen {
 #[derive(Debug, Clone, Parser)]
 pub struct Hub {
     /// The address to bind to
-    #[arg(short = 'B', long, default_value = "127.0.0.1:2424")]
-    pub bind: SocketAddr,
+    #[arg(short = 'B', long)]
+    pub bind: Option<SocketAddr>,
     /// The data directory to use
     #[arg(short = 'D', long, env = "PATCHUP_HUB_DATA")]
     pub data: PathBuf,
