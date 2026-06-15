@@ -44,11 +44,11 @@ struct State {
 }
 
 impl State {
-    fn new(ssh_key: PrivateKey, data_dir: PathBuf) -> Self {
+    fn new(ssh_key: PrivateKey, node: NodeInfo, data_dir: PathBuf) -> Self {
         Self {
             ssh_key: Arc::new(ssh_key),
             data_dir,
-            data: StateData::new(),
+            data: StateData::new(node),
             timers: Timers::default(),
         }
     }
@@ -61,11 +61,8 @@ struct StateData {
 }
 
 impl StateData {
-    fn new() -> Self {
-        Self {
-            node: NodeInfo::query(),
-            hub: None,
-        }
+    fn new(node: NodeInfo) -> Self {
+        Self { node, hub: None }
     }
 }
 
@@ -379,6 +376,8 @@ pub async fn run(_config: Option<&Path>, args: &Agent) -> Result<()> {
         .as_ref()
         .context("Data directory is required to start agent")?;
 
+    let node = NodeInfo::query();
+
     fs::create_dir_all(data_dir)
         .await
         .with_context(|| format!("Failed to create directory: {data_dir:?}"))?;
@@ -389,7 +388,7 @@ pub async fn run(_config: Option<&Path>, args: &Agent) -> Result<()> {
     let ssh_key_path = data_dir.join("ssh.key");
     let ssh_key = keygen::init_from_path(&ssh_key_path).await?;
 
-    let mut state = State::new(ssh_key, data_dir.clone());
+    let mut state = State::new(ssh_key, node, data_dir.clone());
     disk::load(&mut state).await?;
 
     let state = Arc::new(ArcSwap::from_pointee(state));
