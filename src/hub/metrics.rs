@@ -52,7 +52,7 @@ async fn metrics(shared: Arc<hub::Shared>) -> Box<dyn warp::Reply> {
 
     let mut stats = BTreeMap::<MetricGroup, i64>::new();
 
-    for (_public_key, node) in &state.nodes {
+    for node in state.nodes.values() {
         let group = MetricGroup {
             os: node.nodeinfo.os.clone(),
             os_id: node.nodeinfo.os_id.clone(),

@@ -160,5 +160,6 @@ pub async fn run(config_path: Option<PathBuf>, args: &Hub) -> Result<()> {
         res = state_machine(state, rx) => res,
         res = server.run(ssh_key.clone(), ssh_bind_addr) => res,
         res = sighup => Ok(res),
+        res = signals::sigterm() => Ok(res),
     }
 }
