@@ -2,6 +2,7 @@
 PartOf=patchup-agent.service
 
 [Socket]
-ListenStream=/run/patchup.sock
+ListenStream=/run/patchup/socket
 SocketMode=0660
+DirectoryMode=0750
 Accept=no

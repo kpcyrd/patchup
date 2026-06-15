@@ -121,7 +121,7 @@ pub enum Plumbing {
 #[derive(Debug, Clone, Parser)]
 pub struct Socket {
     /// The agent socket path to use
-    #[arg(short = 'S', long = "socket", default_value = "/run/patchup.sock")]
+    #[arg(short = 'S', long = "socket", default_value = "/run/patchup/socket")]
     pub path: PathBuf,
 }
 

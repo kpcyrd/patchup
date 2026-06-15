@@ -5,7 +5,7 @@ Requires=patchup-agent.service
 Wants=network-online.target
 
 [Service]
-ExecStart=/usr/bin/patchup agent --refresh /run/patchup.sock -vv
+ExecStart=/usr/bin/patchup agent --refresh /run/patchup/socket -vv
 SyslogIdentifier=%N
 
 LockPersonality=yes
