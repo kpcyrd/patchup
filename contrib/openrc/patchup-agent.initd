@@ -1,0 +1,24 @@
+#!/sbin/openrc-run
+
+name=patchup-agent
+description="patchup agent"
+command=/usr/bin/patchup
+command_args="agent $patchup_agent_args"
+start_stop_daemon_args="--chdir /var/lib/patchup"
+command_user="$patchup_agent_user:$patchup_agent_group"
+command_background=true
+pidfile="/run/$RC_SVCNAME.pid"
+
+error_logger="logger -t '${RC_SVCNAME}' -p daemon.info"
+
+depend() {
+	use dns logger
+	need localmount net
+	after firewall
+}
+
+start_pre() {
+	checkpath --directory --owner "$patchup_agent_user:$patchup_agent_group" --mode 0750 \
+		/var/lib/patchup \
+		/run/patchup
+}
