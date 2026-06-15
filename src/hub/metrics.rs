@@ -65,7 +65,7 @@ async fn metrics(shared: Arc<hub::Shared>) -> Box<dyn warp::Reply> {
 
     for (group, count) in stats {
         let opts = Opts::new(
-            "patchup_node_infos",
+            "patchup_node_count",
             "Number of nodes by OS, architecture, kernel, etc",
         )
         .const_label("os", &group.os)
