@@ -1,0 +1,5 @@
+#!/bin/sh
+# Check for pending system updates
+
+/usr/bin/patchup agent --refresh /run/patchup/socket
+exit 0
