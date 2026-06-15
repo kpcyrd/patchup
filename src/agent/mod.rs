@@ -23,7 +23,7 @@ use tokio::{
     fs,
     io::BufStream,
     net::{UnixListener, UnixStream},
-    sync::{Notify, mpsc},
+    sync::mpsc,
     task::JoinSet,
     time::{self, Duration},
 };
@@ -105,11 +105,17 @@ enum TaskEvent {
     RefreshOffered,
     SetUpdates(BTreeMap<String, UpdateStatus>),
     SetHub(ipc::agent::Hub),
+    PingHub,
+}
+
+enum ConnectorPing {
+    Conditional,
+    Mandatory,
 }
 
 async fn connector_task(
     state: &Arc<ArcSwap<State>>,
-    notify: &Notify,
+    mut notify: mpsc::Receiver<ConnectorPing>,
     _tx: &mpsc::Sender<TaskEvent>,
 ) -> Result<()> {
     // The previous state should include more info, including sysinfo, and hub configuration
@@ -121,23 +127,29 @@ async fn connector_task(
             _ = interval.tick() => {
                 debug!("Timer for hub ping ticked");
             }
-            _ = notify.notified() => {
-                debug!("Received notify from state machine to inspect state and possibly notify hub");
-                let state = state.load();
-                debug!("state={:?}", state);
+            Some(ping) = notify.recv() => {
+                match ping {
+                    ConnectorPing::Conditional => {
+                        debug!("Received notify from state machine to inspect state and possibly notify hub");
+                        let state = state.load();
+                        debug!("state={:?}", state);
 
-                if last_state != state.data {
-                    // Our internal state has changed, so notify the hub
-                    info!("State changed, we should notify hub");
-                    last_state = state.data.clone();
-                } else {
-                    continue;
+                        if last_state != state.data {
+                            // Our internal state has changed, so notify the hub
+                            info!("State changed, we should notify hub");
+                            last_state = state.data.clone();
+                        } else {
+                            continue;
+                        }
+                    }
+                    ConnectorPing::Mandatory => {
+                        debug!("Received notify from state machine to notify hub");
+                    }
                 }
             }
         };
 
         // TODO: also notify hub when timers are overdue
-        // TODO: also notify hub when hub config has changed
 
         let state = state.load();
         debug!("state={:?}", state);
@@ -180,7 +192,7 @@ async fn connector_task(
 // Only this task is allowed to update the state
 async fn state_machine(
     state: &Arc<ArcSwap<State>>,
-    notify: &Notify,
+    connector_tx: mpsc::Sender<ConnectorPing>,
     mut rx: mpsc::Receiver<TaskEvent>,
 ) -> Result<()> {
     loop {
@@ -202,7 +214,8 @@ async fn state_machine(
                 new.timers.last_refresh = Some(time::Instant::now());
                 state.store(Arc::new(new));
 
-                notify.notify_one();
+                // Notify the connector task
+                connector_tx.send(ConnectorPing::Conditional).await?;
             }
             TaskEvent::SetHub(hub) => {
                 debug!("Updating hub configuration");
@@ -216,7 +229,12 @@ async fn state_machine(
                 // Only then register it into the shared state
                 state.store(Arc::new(new));
 
-                notify.notify_one();
+                // Notify the connector task
+                connector_tx.send(ConnectorPing::Conditional).await?;
+            }
+            TaskEvent::PingHub => {
+                debug!("User requested explicit hub");
+                connector_tx.send(ConnectorPing::Mandatory).await?;
             }
         }
     }
@@ -270,6 +288,7 @@ async fn serve_socket_client(
                     &ipc::agent::Status {
                         ssh_key: state.ssh_key.public_key().clone(),
                         node: state.data.node.clone(),
+                        hub: state.data.hub.clone(),
                         timers: state.timers.elapsed(),
                     },
                 )
@@ -340,6 +359,9 @@ async fn serve_socket_client(
 
                 ipc::send(&mut stream, &HubConnected { error }).await?;
             }
+            ipc::agent::Request::PingHub => {
+                tx.send(TaskEvent::PingHub).await?;
+            }
         }
     }
 
@@ -392,12 +414,12 @@ pub async fn run(_config: Option<&Path>, args: &Agent) -> Result<()> {
     disk::load(&mut state).await?;
 
     let state = Arc::new(ArcSwap::from_pointee(state));
-    let (tx, rx) = mpsc::channel(5);
-    let notify = Notify::new();
+    let (state_machine_tx, state_machine_rx) = mpsc::channel(5);
+    let (connector_tx, connector_rx) = mpsc::channel(5);
 
     tokio::select! {
-        res = connector_task(&state, &notify, &tx) => res,
-        res = state_machine(&state, &notify, rx) => res,
-        res = ipc_server(&state, socket, &tx) => res,
+        res = connector_task(&state, connector_rx, &state_machine_tx) => res,
+        res = state_machine(&state, connector_tx, state_machine_rx) => res,
+        res = ipc_server(&state, socket, &state_machine_tx) => res,
     }
 }

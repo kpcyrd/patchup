@@ -17,6 +17,7 @@ pub enum Request {
     Status,
     Refresh { mandatory: bool },
     ConnectHub { hub: ipc::agent::Hub },
+    PingHub,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -29,6 +30,7 @@ pub enum OfferRequest {
 pub struct Status {
     pub ssh_key: PublicKey,
     pub node: NodeInfo,
+    pub hub: Option<Hub>,
     pub timers: Timers,
 }
 

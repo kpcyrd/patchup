@@ -97,12 +97,33 @@ async fn main() -> Result<()> {
             let mut sock = ipc::agent::AgentIpc::connect(&args.socket.path).await?;
             let status = sock.status().await?;
 
+            let mut prompt = Prompt::new();
+
             // Show the agent ssh key so it can be added to the hub configuration
             println!("{} {}", "ssh key:   ".bold(), status.ssh_key.to_openssh()?);
             println!();
 
+            // If we are already connected, ask if we just want to do an explicit ping
+            if let Some(hub) = &status.hub {
+                println!("{} {}", "hub address:    ".bold(), hub.addr);
+                println!(
+                    "{} {}",
+                    "server ssh key: ".bold(),
+                    hub.server_key.to_openssh()?
+                );
+                println!();
+
+                let yes_no = prompt
+                    .get::<prompt::YesNo>("use existing hub config? [yes/no]: ")
+                    .await?;
+                println!();
+                if yes_no.is_yes() {
+                    println!("requested agent to ping hub");
+                    return Ok(());
+                }
+            }
+
             // Ask for the hub address if not provided as argument
-            let mut prompt = Prompt::new();
             let hub_addr = if let Some(addr) = args.addr {
                 println!("hub address [ip:port]: {}", addr);
                 addr

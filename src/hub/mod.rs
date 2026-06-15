@@ -68,7 +68,7 @@ impl Shared {
         self.tx
             .send(TaskEvent::PingNode {
                 public_key,
-                nodeinfo,
+                nodeinfo: Box::new(nodeinfo),
             })
             .await
             .context("Failed to record ping from node")
@@ -79,7 +79,7 @@ impl Shared {
 enum TaskEvent {
     PingNode {
         public_key: PublicKey,
-        nodeinfo: NodeInfo,
+        nodeinfo: Box<NodeInfo>,
     },
     ReloadConfig(Option<PathBuf>),
 }
@@ -103,11 +103,11 @@ async fn state_machine(
                 match new.nodes.entry(public_key) {
                     Entry::Occupied(mut entry) => {
                         let entry = entry.get_mut();
-                        entry.nodeinfo = nodeinfo;
+                        entry.nodeinfo = *nodeinfo;
                         entry.last_ping = Instant::now();
                     }
                     Entry::Vacant(entry) => {
-                        entry.insert(Agent::new(nodeinfo));
+                        entry.insert(Agent::new(*nodeinfo));
                     }
                 }
                 state.store(Arc::new(new));
