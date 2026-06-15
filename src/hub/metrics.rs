@@ -1,6 +1,7 @@
 use crate::errors::*;
 use crate::hub;
 use prometheus::{Encoder, IntGauge, Opts, Registry, TextEncoder};
+use std::collections::BTreeMap;
 use std::convert::Infallible;
 use std::future;
 use std::net::SocketAddr;
@@ -37,14 +38,52 @@ impl Metrics {
     }
 }
 
+fn bump_stats(map: &mut BTreeMap<String, i64>, key: &str) {
+    let num = map.entry(key.to_string()).or_default();
+    *num = num.saturating_add(1);
+}
+
 async fn metrics(shared: Arc<hub::Shared>) -> Box<dyn warp::Reply> {
     let metrics = Metrics::default();
-
-    let opts = Opts::new("hello_world", "Hello world").const_label("hello", "world");
     let state = shared.state.load();
-    let count = state.nodes.len() as i64;
 
-    metrics.gauge(opts, count);
+    let mut stats_os = BTreeMap::new();
+    let mut stats_os_id = BTreeMap::new();
+    let mut stats_arch = BTreeMap::new();
+    let mut stats_kernel = BTreeMap::new();
+
+    for (_public_key, node) in &state.nodes {
+        bump_stats(&mut stats_os, &node.nodeinfo.os);
+        bump_stats(&mut stats_os_id, &node.nodeinfo.os_id);
+        bump_stats(&mut stats_arch, &node.nodeinfo.arch);
+        bump_stats(&mut stats_kernel, &node.nodeinfo.kernel);
+    }
+
+    let opts = Opts::new("node_count_online", "Number of online nodes");
+    metrics.gauge(opts, state.nodes.len() as i64);
+
+    for (os, count) in stats_os {
+        let opts = Opts::new("node_count_os", "Number of nodes by OS").const_label("os", os);
+        metrics.gauge(opts, count);
+    }
+
+    for (os_id, count) in stats_os_id {
+        let opts =
+            Opts::new("node_count_os_id", "Number of nodes by OS ID").const_label("os_id", os_id);
+        metrics.gauge(opts, count);
+    }
+
+    for (arch, count) in stats_arch {
+        let opts = Opts::new("node_count_arch", "Number of nodes by architecture")
+            .const_label("arch", arch);
+        metrics.gauge(opts, count);
+    }
+
+    for (kernel, count) in stats_kernel {
+        let opts = Opts::new("node_count_kernel", "Number of nodes by kernel")
+            .const_label("kernel", kernel);
+        metrics.gauge(opts, count);
+    }
 
     // Encode the metrics
     let buffer = metrics.encode();

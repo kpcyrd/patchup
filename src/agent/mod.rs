@@ -233,7 +233,7 @@ async fn state_machine(
                 connector_tx.send(ConnectorPing::Conditional).await?;
             }
             TaskEvent::PingHub => {
-                debug!("User requested explicit hub");
+                debug!("User requested explicit hub ping");
                 connector_tx.send(ConnectorPing::Mandatory).await?;
             }
         }
