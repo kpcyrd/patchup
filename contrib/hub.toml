@@ -4,19 +4,19 @@
 ## Optionally bind a http port for prometheus metrics. If not set, metrics will be disabled.
 #metrics = "127.0.0.1:2480"
 
-[[admins]]
-name = "admin"
-keys = [
-    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBTiXsBbUK8JxM9IaZvChvYgW4e2tAPKst1VRaS5AAAA",
-]
+#[[admins]]
+#name = "admin"
+#keys = [
+#    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBTiXsBbUK8JxM9IaZvChvYgW4e2tAPKst1VRaS5AAAA",
+#]
 
-[[nodes]]
-name = "foo"
-keys = [
-    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBTiXsBbUK8JxM9IaZvChvYgW4e2tAPKst1VRaS5AAAA",
-]
+#[[nodes]]
+#name = "foo"
+#keys = [
+#    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBTiXsBbUK8JxM9IaZvChvYgW4e2tAPKst1VRaS5AAAA",
+#]
 
-[[nodes]]
-keys = [
-    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBTiXsBbUK8JxM9IaZvChvYgW4e2tAPKst1VRaS5AAAA",
-]
+#[[nodes]]
+#keys = [
+#    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBTiXsBbUK8JxM9IaZvChvYgW4e2tAPKst1VRaS5AAAA",
+#]

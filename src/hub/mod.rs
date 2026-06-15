@@ -14,6 +14,7 @@ use std::collections::{BTreeMap, btree_map::Entry};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::path::PathBuf;
 use std::sync::Arc;
+use tokio::fs;
 use tokio::sync::mpsc;
 use tokio::time::Instant;
 
@@ -130,6 +131,10 @@ async fn state_machine(
 
 pub async fn run(config_path: Option<PathBuf>, args: &Hub) -> Result<()> {
     let config = config::Config::load(config_path.as_deref()).await?;
+
+    fs::create_dir_all(&args.data)
+        .await
+        .with_context(|| format!("Failed to create directory: {:?}", args.data))?;
 
     let ssh_bind_addr = args
         .bind
