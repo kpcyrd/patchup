@@ -6,12 +6,13 @@ use crate::args::Hub;
 use crate::errors::*;
 use crate::keygen;
 use crate::node::NodeInfo;
+use crate::signals;
 use arc_swap::ArcSwap;
 use russh::keys::PublicKey;
 use serde::Serialize;
 use std::collections::{BTreeMap, btree_map::Entry};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-use std::path::Path;
+use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use tokio::time::Instant;
@@ -74,12 +75,13 @@ impl Shared {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 enum TaskEvent {
     PingNode {
         public_key: PublicKey,
         nodeinfo: NodeInfo,
     },
+    ReloadConfig(Option<PathBuf>),
 }
 
 async fn state_machine(
@@ -110,12 +112,24 @@ async fn state_machine(
                 }
                 state.store(Arc::new(new));
             }
+            TaskEvent::ReloadConfig(path) => match config::Config::load(path.as_deref()).await {
+                Ok(config) => {
+                    info!("Config reloaded successfully");
+                    let mut new = state.load().as_ref().clone();
+                    new.config = config;
+                    // TODO: we may want to do some cleanup here, e.g. agents that are no longer valid after the config change
+                    state.store(Arc::new(new));
+                }
+                Err(err) => {
+                    error!("Failed to reload config: {err:#}");
+                }
+            },
         }
     }
 }
 
-pub async fn run(config: Option<&Path>, args: &Hub) -> Result<()> {
-    let config = config::Config::load(config).await?;
+pub async fn run(config_path: Option<PathBuf>, args: &Hub) -> Result<()> {
+    let config = config::Config::load(config_path.as_deref()).await?;
 
     let ssh_bind_addr = args
         .bind
@@ -130,6 +144,9 @@ pub async fn run(config: Option<&Path>, args: &Hub) -> Result<()> {
     let state = State::new(config);
     let state = Arc::new(ArcSwap::from_pointee(state));
     let (shared, rx) = Shared::new(state.clone());
+
+    let sighup = signals::sighup(shared.tx.clone(), TaskEvent::ReloadConfig(config_path));
+
     let shared = Arc::new(shared);
     let mut server = ssh::SshServer::new(shared.clone());
 
@@ -137,5 +154,6 @@ pub async fn run(config: Option<&Path>, args: &Hub) -> Result<()> {
         res = metrics::start(metrics_bind_addr, shared) => res,
         res = state_machine(state, rx) => res,
         res = server.run(ssh_key.clone(), ssh_bind_addr) => res,
+        res = sighup => Ok(res),
     }
 }

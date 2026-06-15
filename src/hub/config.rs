@@ -30,6 +30,7 @@ impl Config {
                 Ok(Cow::Borrowed(path))
             })?;
 
+        info!("Loading config from: {path:?}");
         let config = fs::read_to_string(&path)
             .await
             .with_context(|| format!("Failed to read config file: {path:?}"))?;

@@ -8,6 +8,7 @@ start_stop_daemon_args="--chdir /var/lib/patchup-hub"
 command_user="$patchup_hub_user:$patchup_hub_group"
 command_background=true
 pidfile="/run/$RC_SVCNAME.pid"
+extra_started_commands="reload"
 
 error_logger="logger -t '${RC_SVCNAME}' -p daemon.info"
 
@@ -20,4 +21,10 @@ depend() {
 start_pre() {
 	checkpath --directory --owner "$patchup_hub_user:$patchup_hub_group" --mode 0750 \
 		/var/lib/patchup-hub
+}
+
+reload() {
+	ebegin "Reloading configuration"
+	start-stop-daemon --signal HUP --pidfile "$pidfile"
+	eend $?
 }

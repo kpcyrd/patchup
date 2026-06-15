@@ -7,6 +7,7 @@ pub mod ipc;
 pub mod keygen;
 pub mod node;
 pub mod prompt;
+pub mod signals;
 pub mod ssh;
 pub mod wire;
 
@@ -81,7 +82,7 @@ async fn main() -> Result<()> {
             }
         }
         Subcommand::Hub(hub) => {
-            hub::run(args.config.as_deref(), hub).await?;
+            hub::run(args.config, hub).await?;
         }
         Subcommand::Agent(agent) => {
             // This is within the same subcommand because it's the privileged component of the agent
