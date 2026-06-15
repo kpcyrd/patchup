@@ -118,6 +118,7 @@ async fn main() -> Result<()> {
                     .await?;
                 println!();
                 if yes_no.is_yes() {
+                    sock.ping_hub().await?;
                     println!("requested agent to ping hub");
                     return Ok(());
                 }

@@ -129,4 +129,9 @@ impl AgentIpc {
             Ok(())
         }
     }
+
+    pub async fn ping_hub(&mut self) -> Result<()> {
+        ipc::send(&mut self.stream, &Request::PingHub).await?;
+        Ok(())
+    }
 }
