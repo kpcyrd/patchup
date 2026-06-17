@@ -75,6 +75,18 @@ async fn metrics(shared: Arc<hub::Shared>) -> Box<dyn warp::Reply> {
         metrics.gauge(opts, count);
     }
 
+    for (public_key, node) in &state.nodes {
+        let Some(updates) = &node.nodeinfo.updates else {
+            continue;
+        };
+        for (pkg_manager, updates) in updates {
+            let opts = Opts::new("patchup_node_updates", "Number of pending updates per node")
+                .const_label("node", public_key.to_string())
+                .const_label("pkg_manager", pkg_manager);
+            metrics.gauge(opts, updates.pending.len() as i64);
+        }
+    }
+
     // Encode the metrics
     let buffer = metrics.encode();
     Box::new(buffer)
