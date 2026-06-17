@@ -237,7 +237,7 @@ impl russh::server::Handler for SshSession {
                                 buf.push_str("  updates:   no package manager detected\n");
                             } else {
                                 buf.push_str("  updates:\n");
-                                for (manager, status) in updates {
+                                for (ecosystem, status) in updates {
                                     let n = status.pending.len();
                                     let nomen = if n == 1 { "update" } else { "updates" };
                                     let hint = if status.refresh_error {
@@ -247,7 +247,7 @@ impl russh::server::Handler for SshSession {
                                     };
                                     buf.push_str(&format!(
                                         "    {:<10} {n} pending {nomen}{hint}\n",
-                                        format!("{manager}:"),
+                                        format!("{ecosystem}:"),
                                     ));
                                     for update in &status.pending {
                                         buf.push_str(&format!(

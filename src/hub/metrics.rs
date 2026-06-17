@@ -79,10 +79,10 @@ async fn metrics(shared: Arc<hub::Shared>) -> Box<dyn warp::Reply> {
         let Some(updates) = &node.nodeinfo.updates else {
             continue;
         };
-        for (pkg_manager, updates) in updates {
+        for (ecosystem, updates) in updates {
             let opts = Opts::new("patchup_node_updates", "Number of pending updates per node")
                 .const_label("node", public_key.to_string())
-                .const_label("pkg_manager", pkg_manager);
+                .const_label("ecosystem", ecosystem);
             metrics.gauge(opts, updates.pending.len() as i64);
         }
     }

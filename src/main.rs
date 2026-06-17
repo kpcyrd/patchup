@@ -208,8 +208,8 @@ async fn main() -> Result<()> {
                 println!("{}", "updates:".bold());
                 if let Some(updates) = status.node.updates {
                     if !updates.is_empty() {
-                        for (manager, status) in updates {
-                            let manager = format!("{manager}: ");
+                        for (ecosystem, status) in updates {
+                            let ecosystem = format!("{ecosystem}: ");
 
                             let (num, nomen) = match status.pending.len() {
                                 0 => ("0".green(), "updates"),
@@ -223,7 +223,7 @@ async fn main() -> Result<()> {
                             };
                             println!(
                                 "  {:<8}  {} pending {}{}",
-                                manager.bold(),
+                                ecosystem.bold(),
                                 num.bold(),
                                 nomen,
                                 hint
