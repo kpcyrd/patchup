@@ -84,6 +84,9 @@ pub struct Agent {
 pub struct Connect {
     /// The hub address to connect to
     pub addr: Option<SocketAddr>,
+    /// Automatically answer yes (once to use existing hub config, twice to accept any server key)
+    #[arg(short, long, action(ArgAction::Count))]
+    pub yes: u8,
     #[command(flatten)]
     pub socket: Socket,
     //

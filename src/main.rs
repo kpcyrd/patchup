@@ -113,11 +113,17 @@ async fn main() -> Result<()> {
                 );
                 println!();
 
-                let yes_no = prompt
-                    .get::<prompt::YesNo>("use existing hub config? [yes/no]: ")
-                    .await?;
-                println!();
-                if yes_no.is_yes() {
+                let use_existing = if args.yes == 1 {
+                    true
+                } else {
+                    let yes_no = prompt
+                        .get::<prompt::YesNo>("use existing hub config? [yes/no]: ")
+                        .await?;
+                    println!();
+                    yes_no.is_yes()
+                };
+
+                if use_existing {
                     sock.ping_hub().await?;
                     println!("requested agent to ping hub");
                     return Ok(());
@@ -158,15 +164,20 @@ async fn main() -> Result<()> {
             println!();
 
             // Check if it's already known, otherwise ask if we want to accept it
-            let yes_no = prompt
-                .get::<prompt::YesNo>("accept key? [yes/no]: ")
-                .await?;
+            let accept_key = if args.yes == 2 {
+                true
+            } else {
+                let yes_no = prompt
+                    .get::<prompt::YesNo>("accept key? [yes/no]: ")
+                    .await?;
+                println!();
+                yes_no.is_yes()
+            };
 
-            if !yes_no.is_yes() {
+            if !accept_key {
                 println!("setup canceled by user");
                 return Ok(());
             }
-            println!();
 
             // Check if we can authenticate and the server speaks our protocol
             // If so, persist the configuration in the agent
