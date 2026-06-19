@@ -119,6 +119,10 @@ pub enum Plumbing {
         #[command(flatten)]
         output: Output,
     },
+    CheckPacman {
+        #[command(flatten)]
+        output: Output,
+    },
 }
 
 #[derive(Debug, Clone, Parser)]

@@ -1,5 +1,6 @@
 pub mod apk;
 pub mod apt;
+pub mod pacman;
 
 use serde::{Deserialize, Serialize};
 

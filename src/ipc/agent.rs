@@ -97,6 +97,7 @@ impl AgentIpc {
                     let backends = [
                         (patches::apk::ID, patches::apk::detect().await),
                         (patches::apt::ID, patches::apt::detect().await),
+                        (patches::pacman::ID, patches::pacman::detect().await),
                     ]
                     .into_iter()
                     .filter(|(_, detected)| *detected)
@@ -110,6 +111,7 @@ impl AgentIpc {
                     let updates = match name.as_str() {
                         patches::apk::ID => patches::apk::query().await?,
                         patches::apt::ID => patches::apt::query().await?,
+                        patches::pacman::ID => patches::pacman::query().await?,
                         _ => break,
                     };
                     ipc::send(&mut self.stream, &updates).await?;

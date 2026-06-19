@@ -55,6 +55,7 @@ pub async fn query() -> Result<UpdateStatus> {
         );
     }
 
+    // Parsing output
     let stdout = String::from_utf8_lossy(&list.stdout);
     status.pending = parse(&stdout);
 

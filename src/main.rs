@@ -264,6 +264,9 @@ async fn main() -> Result<()> {
             Plumbing::CheckApt { output } => {
                 agent::patches::apt::run(output).await?;
             }
+            Plumbing::CheckPacman { output } => {
+                agent::patches::pacman::run(output).await?;
+            }
         },
     }
 
