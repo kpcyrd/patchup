@@ -72,7 +72,7 @@ pub async fn query() -> Result<UpdateStatus> {
         .output()
         .await
         .context("Failed to run pacman -Qu")?;
-    if !list.status.success() {
+    if !list.status.success() && !list.stderr.is_empty() {
         dir.drop_async().await;
 
         bail!(
