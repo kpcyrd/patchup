@@ -7,7 +7,7 @@ use tokio::fs;
 use tokio::io::ErrorKind;
 
 pub const ID: &str = "pacman";
-const PATH: &str = "/var/lib/pacman";
+const PATH: &str = "/var/lib/pacman/local";
 
 fn parse(data: &str) -> Vec<Update> {
     data.lines()
