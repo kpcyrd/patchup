@@ -51,8 +51,10 @@ async fn metrics(shared: Arc<hub::Shared>) -> Box<dyn warp::Reply> {
     let state = shared.state.load();
 
     let mut stats = BTreeMap::<MetricGroup, i64>::new();
+    let mut pending_kernels = BTreeMap::<String, i64>::new();
 
     for node in state.nodes.values() {
+        // Count nodes
         let group = MetricGroup {
             os: node.nodeinfo.os.clone(),
             os_id: node.nodeinfo.os_id.clone(),
@@ -61,6 +63,12 @@ async fn metrics(shared: Arc<hub::Shared>) -> Box<dyn warp::Reply> {
         };
         let num = stats.entry(group).or_default();
         *num = num.saturating_add(1);
+
+        // Count pending kernels
+        if let Some(kernel) = &node.nodeinfo.pending_kernel {
+            let num = pending_kernels.entry(kernel.clone()).or_default();
+            *num = num.saturating_add(1);
+        }
     }
 
     for (group, count) in stats {
@@ -85,6 +93,15 @@ async fn metrics(shared: Arc<hub::Shared>) -> Box<dyn warp::Reply> {
                 .const_label("ecosystem", ecosystem);
             metrics.gauge(opts, updates.pending.len() as i64);
         }
+    }
+
+    for (kernel, count) in pending_kernels {
+        let opts = Opts::new(
+            "patchup_pending_kernels",
+            "Number of nodes with a pending kernel update",
+        )
+        .const_label("kernel", kernel);
+        metrics.gauge(opts, count);
     }
 
     // Encode the metrics
