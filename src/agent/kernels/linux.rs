@@ -34,7 +34,7 @@ pub async fn list_available() -> Result<Vec<kernels::sort::Version>> {
             continue;
         }
 
-        let version = kernels::sort::Version::from(name.to_string());
+        let version = kernels::sort::Version::from(format!("Linux {name}"));
         debug!("Found kernel version on disk: {version:?}");
         available.push(version);
     }

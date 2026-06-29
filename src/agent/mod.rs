@@ -245,7 +245,11 @@ async fn state_machine(
                 {
                     let kernel = kernel.into();
                     if new.data.node.pending_kernel.as_ref() != Some(&kernel) {
-                        info!("Kernel update available: {kernel:?} > {current_kernel:?}");
+                        info!(
+                            "Kernel update available: {:?} > {:?}",
+                            kernel,
+                            current_kernel.as_str()
+                        );
                         new.data.node.pending_kernel = Some(kernel);
                     }
                 } else {
