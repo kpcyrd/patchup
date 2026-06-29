@@ -1,5 +1,6 @@
 pub mod config;
 pub mod disk;
+pub mod kernels;
 pub mod patches;
 pub mod refresh;
 pub mod sandbox;

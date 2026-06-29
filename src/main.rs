@@ -267,6 +267,12 @@ async fn main() -> Result<()> {
             Plumbing::CheckPacman { output } => {
                 agent::patches::pacman::run(output).await?;
             }
+            Plumbing::ScanLinuxKernels => {
+                let kernels = agent::kernels::linux::list_available().await?;
+                if let Some(max) = kernels.iter().max() {
+                    info!("Latest kernel version: {:?}", max.as_str());
+                }
+            }
         },
     }
 

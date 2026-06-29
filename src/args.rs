@@ -123,6 +123,7 @@ pub enum Plumbing {
         #[command(flatten)]
         output: Output,
     },
+    ScanLinuxKernels,
 }
 
 #[derive(Debug, Clone, Parser)]
