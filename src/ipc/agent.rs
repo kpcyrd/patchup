@@ -24,6 +24,7 @@ pub enum Request {
 pub enum OfferRequest {
     ListPkgBackends,
     QueryPkgBackend { name: String },
+    ScanPendingKernel,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -115,6 +116,11 @@ impl AgentIpc {
                         _ => break,
                     };
                     ipc::send(&mut self.stream, &updates).await?;
+                }
+                OfferRequest::ScanPendingKernel => {
+                    let kernels = agent::kernels::linux::list_available().await?;
+                    let kernel = kernels.into_iter().max();
+                    ipc::send(&mut self.stream, &kernel).await?;
                 }
             }
         }

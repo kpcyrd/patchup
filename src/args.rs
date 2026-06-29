@@ -1,4 +1,4 @@
-use clap::{ArgAction, Parser};
+use clap::{ArgAction, Parser, ValueHint};
 use std::net::SocketAddr;
 use std::path::PathBuf;
 
@@ -57,7 +57,7 @@ pub struct Hub {
     #[arg(short = 'B', long)]
     pub bind: Option<SocketAddr>,
     /// The data directory to use
-    #[arg(short = 'D', long, env = "PATCHUP_HUB_DATA")]
+    #[arg(short = 'D', long, env = "PATCHUP_HUB_DATA", value_name = "PATH", value_hint = ValueHint::DirPath)]
     pub data: PathBuf,
     /// Bind a port for http prometheus metrics
     #[arg(long)]
@@ -70,10 +70,10 @@ pub struct Agent {
     /// The hub address to connect to
     pub addr: Option<SocketAddr>,
     /// The data directory to use
-    #[arg(short = 'D', long, env = "PATCHUP_AGENT_DATA")]
+    #[arg(short = 'D', long, env = "PATCHUP_AGENT_DATA", value_name = "PATH", value_hint = ValueHint::DirPath)]
     pub data: Option<PathBuf>,
     /// Connect as privileged process to socket to refresh patch status
-    #[arg(short = 'R', long)]
+    #[arg(short = 'R', long, value_name = "PATH", value_hint = ValueHint::FilePath)]
     pub refresh: Option<PathBuf>,
     #[command(flatten)]
     pub socket: Socket,
@@ -123,12 +123,13 @@ pub enum Plumbing {
         #[command(flatten)]
         output: Output,
     },
+    ScanLinuxKernels,
 }
 
 #[derive(Debug, Clone, Parser)]
 pub struct Socket {
     /// The agent socket path to use
-    #[arg(short = 'S', long = "socket", default_value = "/run/patchup/socket")]
+    #[arg(short = 'S', long = "socket", default_value = "/run/patchup/socket", value_hint = ValueHint::FilePath)]
     pub path: PathBuf,
 }
 
