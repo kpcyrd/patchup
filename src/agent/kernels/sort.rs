@@ -1,18 +1,21 @@
+use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
-use std::str::FromStr;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(transparent)]
 pub struct Version {
     value: String,
 }
 
-impl FromStr for Version {
-    type Err = ();
+impl From<String> for Version {
+    fn from(value: String) -> Self {
+        Version { value }
+    }
+}
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(Version {
-            value: s.to_string(),
-        })
+impl From<Version> for String {
+    fn from(version: Version) -> Self {
+        version.value
     }
 }
 
@@ -97,9 +100,19 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_version_serde() {
+        let version = Version::from("1.2.3".to_string());
+        let serialized = serde_json::to_string(&version).unwrap();
+        assert_eq!(serialized, r#""1.2.3""#);
+
+        let deserialized = serde_json::from_str::<Version>(&serialized).unwrap();
+        assert_eq!(deserialized, version);
+    }
+
+    #[test]
     fn test_alpine() {
-        let a = Version::from_str("6.18.35-0-virt").unwrap();
-        let b = Version::from_str("6.18.36-0-virt").unwrap();
+        let a = Version::from("6.18.35-0-virt".to_string());
+        let b = Version::from("6.18.36-0-virt".to_string());
         assert_eq!(a.cmp(&b), Ordering::Less);
         assert_eq!(b.cmp(&a), Ordering::Greater);
         assert_eq!(a.cmp(&a), Ordering::Equal);
@@ -108,8 +121,8 @@ mod tests {
 
     #[test]
     fn test_numeric_sort() {
-        let a = Version::from_str("1.2.3").unwrap();
-        let b = Version::from_str("1.2.10").unwrap();
+        let a = Version::from("1.2.3".to_string());
+        let b = Version::from("1.2.10".to_string());
         assert_eq!(a.cmp(&b), Ordering::Less);
         assert_eq!(b.cmp(&a), Ordering::Greater);
     }
@@ -136,28 +149,28 @@ mod tests {
 
     #[test]
     fn test_arch_suffix() {
-        let a = Version::from_str("7.0.14-arch1-1").unwrap();
-        let b = Version::from_str("7.0.14-arch1-2").unwrap();
+        let a = Version::from("7.0.14-arch1-1".to_string());
+        let b = Version::from("7.0.14-arch1-2".to_string());
         assert_eq!(a.cmp(&b), Ordering::Less);
         assert_eq!(b.cmp(&a), Ordering::Greater);
 
         // Not sure this ever happens, but make sure it would work
-        let a = Version::from_str("7.0.14-arch1-1").unwrap();
-        let b = Version::from_str("7.0.14-arch2-1").unwrap();
+        let a = Version::from("7.0.14-arch1-1".to_string());
+        let b = Version::from("7.0.14-arch2-1".to_string());
         assert_eq!(a.cmp(&b), Ordering::Less);
         assert_eq!(b.cmp(&a), Ordering::Greater);
     }
 
     #[test]
     fn test_hardened_kernel() {
-        let a = Version::from_str("6.17.3-hardened1-3-hardened").unwrap();
-        let b = Version::from_str("7.0.12-hardened1-2-hardened").unwrap();
+        let a = Version::from("6.17.3-hardened1-3-hardened".to_string());
+        let b = Version::from("7.0.12-hardened1-2-hardened".to_string());
         assert_eq!(a.cmp(&b), Ordering::Less);
         assert_eq!(b.cmp(&a), Ordering::Greater);
 
         // Test identical upstream versions
-        let a = Version::from_str("7.0.12-hardened1-1-hardened").unwrap();
-        let b = Version::from_str("7.0.12-hardened1-2-hardened").unwrap();
+        let a = Version::from("7.0.12-hardened1-1-hardened".to_string());
+        let b = Version::from("7.0.12-hardened1-2-hardened".to_string());
         assert_eq!(a.cmp(&b), Ordering::Less);
         assert_eq!(b.cmp(&a), Ordering::Greater);
     }

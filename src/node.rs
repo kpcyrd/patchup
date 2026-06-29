@@ -13,6 +13,7 @@ pub struct NodeInfo {
     pub arch: String,
     pub kernel: String,
     pub updates: Option<BTreeMap<String, UpdateStatus>>,
+    pub pending_kernel: Option<String>,
     /*
     #[serde_as(as = "DurationSeconds<u64>")]
     pub uptime: Duration,
@@ -36,6 +37,7 @@ impl NodeInfo {
             arch: System::cpu_arch(),
             kernel: System::kernel_long_version(),
             updates: None,
+            pending_kernel: None,
             // uptime: Duration::from_secs(System::uptime()),
         }
     }

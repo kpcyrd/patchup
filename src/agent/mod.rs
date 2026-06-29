@@ -106,6 +106,7 @@ enum TaskEvent {
     RefreshOffered,
     SetUpdates(BTreeMap<String, UpdateStatus>),
     SetHub(ipc::agent::Hub),
+    SetPendingKernel(Option<kernels::sort::Version>),
     PingHub,
 }
 
@@ -233,6 +234,29 @@ async fn state_machine(
                 // Notify the connector task
                 connector_tx.send(ConnectorPing::Conditional).await?;
             }
+            TaskEvent::SetPendingKernel(available_kernel) => {
+                debug!("Updating pending kernel");
+                let mut new = state.load().as_ref().clone();
+
+                let current_kernel = kernels::sort::Version::from(new.data.node.kernel.clone());
+
+                if let Some(kernel) = available_kernel
+                    && kernel > current_kernel
+                {
+                    let kernel = kernel.into();
+                    if new.data.node.pending_kernel.as_ref() != Some(&kernel) {
+                        info!("Kernel update available: {kernel:?} > {current_kernel:?}");
+                        new.data.node.pending_kernel = Some(kernel);
+                    }
+                } else {
+                    new.data.node.pending_kernel = None;
+                }
+
+                state.store(Arc::new(new));
+
+                // Notify the connector task
+                connector_tx.send(ConnectorPing::Conditional).await?;
+            }
             TaskEvent::PingHub => {
                 debug!("User requested explicit hub ping");
                 connector_tx.send(ConnectorPing::Mandatory).await?;
@@ -324,6 +348,12 @@ async fn serve_socket_client(
 
                     debug!("Finished querying pkg backends");
                     tx.send(TaskEvent::SetUpdates(updates)).await?;
+
+                    debug!("Checking for pending kernel reboot");
+                    ipc::send(&mut stream, &OfferRequest::ScanPendingKernel).await?;
+                    let kernel =
+                        ipc::recv::<_, Option<kernels::sort::Version>>(&mut stream).await?;
+                    tx.send(TaskEvent::SetPendingKernel(kernel)).await?;
                 } else {
                     debug!("Declining refresh offer, not due yet");
                 }
