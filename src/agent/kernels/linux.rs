@@ -30,7 +30,7 @@ pub async fn list_available() -> Result<Vec<kernels::sort::Version>> {
         let name = entry.file_name();
         let Some(name) = name.to_str() else { continue };
 
-        if name == "." || name == ".." {
+        if name.starts_with('.') {
             continue;
         }
 

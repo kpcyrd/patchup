@@ -174,4 +174,13 @@ mod tests {
         assert_eq!(a.cmp(&b), Ordering::Less);
         assert_eq!(b.cmp(&a), Ordering::Greater);
     }
+
+    #[test]
+    #[ignore = "We don't have a solution for this yet, unrelated folders should not win version compare"]
+    fn test_old_kernel() {
+        let a = Version::from("Linux .old".to_string());
+        let b = Version::from("Linux 7.0.12-arch1-1".to_string());
+        assert_eq!(a.cmp(&b), Ordering::Less);
+        assert_eq!(b.cmp(&a), Ordering::Greater);
+    }
 }
