@@ -124,6 +124,7 @@ pub enum Plumbing {
         output: Output,
     },
     ScanLinuxKernels,
+    Nodeinfo,
 }
 
 #[derive(Debug, Clone, Parser)]

@@ -273,6 +273,10 @@ async fn main() -> Result<()> {
                     info!("Latest kernel version: {:?}", max.as_str());
                 }
             }
+            Plumbing::Nodeinfo => {
+                let nodeinfo = node::NodeInfo::query();
+                println!("{nodeinfo:#?}");
+            }
         },
     }
 
