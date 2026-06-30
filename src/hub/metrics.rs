@@ -52,6 +52,7 @@ async fn metrics(shared: Arc<hub::Shared>) -> Box<dyn warp::Reply> {
 
     let mut stats = BTreeMap::<MetricGroup, i64>::new();
     let mut pending_kernels = BTreeMap::<String, i64>::new();
+    let mut patchup_versions = BTreeMap::<String, i64>::new();
 
     for node in state.nodes.values() {
         // Count nodes
@@ -69,6 +70,12 @@ async fn metrics(shared: Arc<hub::Shared>) -> Box<dyn warp::Reply> {
             let num = pending_kernels.entry(kernel.clone()).or_default();
             *num = num.saturating_add(1);
         }
+
+        // Count patchup versions
+        let num = patchup_versions
+            .entry(node.nodeinfo.patchup_version.clone())
+            .or_default();
+        *num = num.saturating_add(1);
     }
 
     for (group, count) in stats {
@@ -101,6 +108,15 @@ async fn metrics(shared: Arc<hub::Shared>) -> Box<dyn warp::Reply> {
             "Number of nodes with a pending kernel update",
         )
         .const_label("kernel", kernel);
+        metrics.gauge(opts, count);
+    }
+
+    for (version, count) in patchup_versions {
+        let opts = Opts::new(
+            "patchup_agent_versions",
+            "Number of nodes running a specific patchup agent version",
+        )
+        .const_label("version", version);
         metrics.gauge(opts, count);
     }
 

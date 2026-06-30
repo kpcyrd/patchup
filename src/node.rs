@@ -4,9 +4,12 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use sysinfo::System;
 
+const PATCHUP_VERSION: &str = env!("CARGO_PKG_VERSION");
+
 // #[serde_as]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct NodeInfo {
+    pub patchup_version: String,
     pub hostname: String,
     pub os: String,
     pub os_id: String,
@@ -31,6 +34,7 @@ impl NodeInfo {
             .unwrap_or_else(|| "unknown".to_string());
 
         Self {
+            patchup_version: PATCHUP_VERSION.to_string(),
             hostname: System::host_name().unwrap_or_else(|| "-".to_string()),
             os,
             os_id: System::distribution_id(),
