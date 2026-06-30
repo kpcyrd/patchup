@@ -46,6 +46,16 @@ struct MetricGroup {
     kernel: String,
 }
 
+fn bump_ctr(map: &mut BTreeMap<String, i64>, key: &str) {
+    if let Some(num) = map.get_mut(key) {
+        *num = num.saturating_add(1);
+    } else {
+        // Only copy the string if necessary
+        // At this point we can use insert because we are certain the key is not in the map
+        map.insert(key.to_string(), 1);
+    }
+}
+
 async fn metrics(shared: Arc<hub::Shared>) -> Box<dyn warp::Reply> {
     let metrics = Metrics::default();
     let state = shared.state.load();
@@ -67,15 +77,11 @@ async fn metrics(shared: Arc<hub::Shared>) -> Box<dyn warp::Reply> {
 
         // Count pending kernels
         if let Some(kernel) = &node.nodeinfo.pending_kernel {
-            let num = pending_kernels.entry(kernel.clone()).or_default();
-            *num = num.saturating_add(1);
+            bump_ctr(&mut pending_kernels, kernel);
         }
 
         // Count patchup versions
-        let num = patchup_versions
-            .entry(node.nodeinfo.patchup_version.clone())
-            .or_default();
-        *num = num.saturating_add(1);
+        bump_ctr(&mut patchup_versions, &node.nodeinfo.patchup_version);
     }
 
     for (group, count) in stats {
