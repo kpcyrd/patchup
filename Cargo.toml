@@ -20,7 +20,7 @@ log = "0.4"
 platform-info = "2"
 prometheus = { version = "0.14", default-features = false }
 rand = "0.10"
-russh = { version = "0.61", features = ["serde"] }
+russh = { version = "0.62", features = ["serde"] }
 sd-listen-fds = "0.2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

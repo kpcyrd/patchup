@@ -5,7 +5,7 @@ use crate::ssh;
 use russh::{
     Channel, ChannelId, MethodKind, MethodSet,
     keys::{PrivateKey, PublicKey},
-    server::{Auth, Msg, Server, Session},
+    server::{Auth, ChannelOpenHandle, Msg, Server, Session},
 };
 use std::collections::BTreeMap;
 use std::net::SocketAddr;
@@ -121,11 +121,13 @@ impl russh::server::Handler for SshSession {
     async fn channel_open_session(
         &mut self,
         channel: Channel<Msg>,
+        reply: ChannelOpenHandle,
         _session: &mut Session,
-    ) -> Result<bool, Self::Error> {
+    ) -> Result<(), Self::Error> {
         debug!("Channel open session: {channel:?}");
         self.pending_channels.insert(channel.id(), channel);
-        Ok(true)
+        reply.accept().await;
+        Ok(())
     }
 
     async fn channel_close(&mut self, channel_id: ChannelId, _session: &mut Session) -> Result<()> {
