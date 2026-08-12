@@ -118,7 +118,16 @@ async fn state_machine(
                     info!("Config reloaded successfully");
                     let mut new = state.load().as_ref().clone();
                     new.config = config;
-                    // TODO: we may want to do some cleanup here, e.g. agents that are no longer valid after the config change
+
+                    // Cleanup removed nodes
+                    new.nodes.retain(|pubkey, _v| {
+                        new.config
+                            .nodes
+                            .iter()
+                            .any(|node| node.keys.contains(pubkey))
+                    });
+
+                    // Store the new state
                     state.store(Arc::new(new));
                 }
                 Err(err) => {
