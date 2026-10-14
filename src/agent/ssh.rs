@@ -3,7 +3,7 @@ use crate::ssh;
 use russh::{
     Channel, Preferred,
     client::{Handle, Msg},
-    keys::{HashAlg, PrivateKey, PrivateKeyWithHashAlg, PublicKey},
+    keys::{HashAlg, PrivateKey, PrivateKeyWithHashAlg, PublicKey, PublicKeyOrCertificate},
 };
 use serde::Serialize;
 use std::borrow::Cow;
@@ -28,11 +28,13 @@ impl russh::client::Handler for SshClient {
 
     async fn check_server_key(
         &mut self,
-        server_public_key: &PublicKey,
+        server_public_key: &PublicKeyOrCertificate,
     ) -> Result<bool, Self::Error> {
+        let server_public_key = server_public_key.public_key();
+
         match &self.server_key_verification {
             ServerKeyVerification::Matches(expected) => {
-                if server_public_key == expected {
+                if server_public_key == *expected {
                     debug!("Server public key matches expected key");
                     Ok(true)
                 } else {
